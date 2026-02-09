@@ -10,31 +10,15 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class BatchPayloadParserTest {
-    private static final String ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private static final String DIGITS = "0123456789";
-    private static final String SPECIALS = "'()+_,-./:=?";
-    private static final String BCHARNOSPACES =
-            ALPHA + DIGITS + SPECIALS;
-
-    private static final String NON_LINEAR_WHITESPACES = " \t";
-
-    private static final String BCHARS = BCHARNOSPACES + NON_LINEAR_WHITESPACES;
-
-    private final Logger logger = Logger.getLogger(BatchPayloadParserTest.class.getName());
-
     // The first batch of tests focuses on the parser extrapolating the correct number of
     // parts:
 
@@ -347,12 +331,12 @@ public class BatchPayloadParserTest {
                                       """)
                                 .closingDelimiter(),
                         List.of(
-                                RequestBatchItemBuilder.builder()
+                                BatchRequestItemBuilder.builder()
                                         .method("POST").uri("/batch")
                                         .header("Content-Type", "")
                                         .content("{}")
                                         .create(),
-                                RequestBatchItemBuilder.builder()
+                                BatchRequestItemBuilder.builder()
                                         .method("DELETE").uri("/path/to/point").query("k=v")
                                         .header("X-SomeCustomKey", "a")
                                         .content("""
@@ -360,7 +344,7 @@ public class BatchPayloadParserTest {
                                                 over multiple lines\r
                                                 """)
                                         .create(),
-                                RequestBatchItemBuilder.builder()
+                                BatchRequestItemBuilder.builder()
                                         .method("PATCH").uri("/some/uri").query("k1=v1&k2=v2")
                                         .header("Content-Transfer-Encoding", "binary")
                                         .content("""
@@ -382,7 +366,7 @@ public class BatchPayloadParserTest {
                                 .text("")
                                 .closingDelimiter(),
                         List.of(
-                                RequestBatchItemBuilder.builder()
+                                BatchRequestItemBuilder.builder()
                                         .method("POST").uri("/batch")
                                         .header("Content-Type", "text/plain")
                                         .content("")
