@@ -11,42 +11,6 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 public class DefaultPasswordRuleTest {
-    private static Stream<Arguments> minLenRuleInputs() {
-        return Stream.of(
-                Arguments.of(-1, null, "a", Optional.empty()),
-                // I was expecting an Exception to be thrown but it didn't
-                Arguments.of(0, "", null, Optional.empty()),
-                Arguments.of(1, "u", "", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "x", "1", Optional.empty()),
-                Arguments.of(2, "xyz", "*", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "u", "@a3", Optional.empty()),
-                Arguments.of(Integer.MAX_VALUE, "admin", "1234", Optional.of(PasswordPolicyException.class))
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("minLenRuleInputs")
-    public void testMinLenRule(
-            int minLength,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
-    ) {
-        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
-        conf.setMinLength(minLength);
-        conf.setAlphabetical(0);
-        conf.setLowercase(0);
-        conf.setMaxLength(Integer.MAX_VALUE);
-        conf.setSpecial(0);
-        conf.setDigit(0);
-        conf.setUppercase(0);
-        conf.setRepeatSame(0);
-        conf.setUsernameAllowed(true);
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
-    }
-
     private static Stream<Arguments> alphaRuleInputs() {
         return Stream.of(
                 Arguments.of(-1, null, "", Optional.empty()),
@@ -54,11 +18,10 @@ public class DefaultPasswordRuleTest {
                 // Arguments.of(1, "u", null, Optional.empty()),
                 Arguments.of(1, "x", "1", Optional.of(PasswordPolicyException.class)),
                 Arguments.of(1, "admin", "a7", Optional.empty()),
-                Arguments.of(1, "user", "7^?B", Optional.empty()),
+                Arguments.of(1, "#@[1", "7^?B", Optional.empty()),
                 Arguments.of(1, "admin", "+bCD34^", Optional.empty()),
                 Arguments.of(2, "mrossi", "213123a21", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "mrossi", "21F123a21", Optional.empty())
-
+                Arguments.of(Integer.MAX_VALUE, "User", "(CCi*]JSB)SI%M;", Optional.of(PasswordPolicyException.class))
         );
     }
 
@@ -66,7 +29,7 @@ public class DefaultPasswordRuleTest {
     @MethodSource("alphaRuleInputs")
     public void testAlphaRule(
             int alphabetical,
-            String user,
+            String username,
             String password,
             Optional<Class<Exception>> exception
     ) {
@@ -82,11 +45,81 @@ public class DefaultPasswordRuleTest {
         conf.setUsernameAllowed(true);
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
-        if (exception.isPresent()) {
-            Assertions.assertThrows(exception.get(), () -> rule.enforce(user, password));
-        } else {
-            rule.enforce(user, password);
-        }
+        testRule(rule, username, password, exception);
+    }
+
+    private static Stream<Arguments> digitRuleInputs() {
+        return Stream.of(
+                Arguments.of(-1, null, "", Optional.empty()),
+                Arguments.of(0, "", "word", Optional.empty()),
+                Arguments.of(1, "user", "a", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "adm1n", "w0rd", Optional.empty()),
+                Arguments.of(1, "adm#n", "3ord", Optional.empty()),
+                Arguments.of(1, "admin", "wor4", Optional.empty()),
+                // I was expecting a failure but got nothing
+                // Arguments.of(2, "u", null, Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "p", "jhbcf5vbh", Optional.of(PasswordPolicyException.class))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("digitRuleInputs")
+    public void testDigitRule(
+            int digit,
+            String username,
+            String password,
+            Optional<Class<Exception>> exception
+    ) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setMinLength(0);
+        conf.setAlphabetical(0);
+        conf.setLowercase(0);
+        conf.setMaxLength(Integer.MAX_VALUE);
+        conf.setSpecial(0);
+        conf.setDigit(digit);
+        conf.setUppercase(0);
+        conf.setRepeatSame(0);
+        conf.setUsernameAllowed(true);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        testRule(rule, username, password, exception);
+    }
+
+    private static Stream<Arguments> minLenRuleInputs() {
+        return Stream.of(
+                Arguments.of(-1, null, "a", Optional.empty()),
+                // I was expecting an Exception to be thrown, but it didn't
+                // Arguments.of(0, "", null, Optional.empty()),
+                Arguments.of(1, "u", "", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "x", "1", Optional.empty()),
+                Arguments.of(2, "xyz", "*", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "u", "@a3", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "admin", "1234", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "", "%&", Optional.empty())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("minLenRuleInputs")
+    public void testMinLenRule(
+            int minLength,
+            String username,
+            String password,
+            Optional<Class<Exception>> exception
+    ) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setAlphabetical(0);
+        conf.setDigit(0);
+        conf.setLowercase(0);
+        conf.setMaxLength(Integer.MAX_VALUE);
+        conf.setMinLength(minLength);
+        conf.setRepeatSame(0);
+        conf.setSpecial(0);
+        conf.setUppercase(0);
+        conf.setUsernameAllowed(true);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        testRule(rule, username, password, exception);
     }
 
     private static Stream<Arguments> lowercaseRuleInputs() {
@@ -200,43 +233,6 @@ public class DefaultPasswordRuleTest {
         conf.setSpecial(special);
         conf.getSpecialChars().addAll(specialChars);
         conf.setDigit(0);
-        conf.setUppercase(0);
-        conf.setRepeatSame(0);
-        conf.setUsernameAllowed(true);
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
-    }
-
-    private static Stream<Arguments> digitRuleInputs() {
-        return Stream.of(
-                Arguments.of(-1, null, "", Optional.empty()),
-                Arguments.of(0, "", "word", Optional.empty()),
-                Arguments.of(1, "user", "a", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "adm1n", "w0rd", Optional.empty()),
-                Arguments.of(1, "adm#n", "3ord", Optional.empty()),
-                Arguments.of(1, "admin", "wor4", Optional.empty()),
-                // I was expecting a failure but got nothing
-                // Arguments.of(2, "u", null, Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "p", "jhbcf5vbh", Optional.of(PasswordPolicyException.class))
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("digitRuleInputs")
-    public void testDigitRule(
-            int digit,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
-    ) {
-        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
-        conf.setMinLength(0);
-        conf.setAlphabetical(0);
-        conf.setLowercase(0);
-        conf.setMaxLength(Integer.MAX_VALUE);
-        conf.setSpecial(0);
-        conf.setDigit(digit);
         conf.setUppercase(0);
         conf.setRepeatSame(0);
         conf.setUsernameAllowed(true);
