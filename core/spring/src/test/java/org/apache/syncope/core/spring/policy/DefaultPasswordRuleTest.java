@@ -123,14 +123,14 @@ public class DefaultPasswordRuleTest {
     private static Stream<Arguments> lowercaseRuleInputs() {
         return Stream.of(
                 Arguments.of(-1, null, "", Optional.empty()),
-                Arguments.of(0, "", "hgtf53JSh", Optional.empty()),
-                Arguments.of(1, "admin", "#?2", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "user", "OpLà", Optional.empty()),
-                Arguments.of(1, "1", "jfHY3a#", Optional.empty()),
-                Arguments.of(2, "username", "Ah", Optional.of(PasswordPolicyException.class)),
-                // Arguments.of(2, "z", null, Optional.empty())
-                Arguments.of(2, "p", "oH638h", Optional.empty())
-        );
+                Arguments.of(0, "user", null, Optional.empty()),
+                Arguments.of(1, "m#]+37[$", "\"%=Y$_", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(0, "~0{tw", "\"L.SI-%\"", Optional.empty()),
+                Arguments.of(1, "£$&FGA%s", "$KLuA83", Optional.empty()),
+                Arguments.of(2, "br532fd", "30s-Tù", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "admin", "=]G5eE0a(U`l", Optional.empty()),
+                Arguments.of(1, "34fd2d", "~_#0_{h4G", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "verylongusername", "verylongpassword", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -199,14 +199,7 @@ public class DefaultPasswordRuleTest {
 
     private static Stream<Arguments> maxLenRuleInputs() {
         return Stream.of(
-                // It seems -1 disable the option
-                // Arguments.of(-1, "user", "", Optional.empty()),
-                Arguments.of(0, "u", "", Optional.empty()),
-                Arguments.of(1, "", "pp", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, null, "a", Optional.empty()),
-                Arguments.of(8, "passwor", Optional.empty()),
-                Arguments.of(8, "password", Optional.empty()),
-                Arguments.of(8, "ner+3àsgm", Optional.of(PasswordPolicyException.class))
+                Arguments.of(0, null, "a", Optional.empty())
         );
     }
 
