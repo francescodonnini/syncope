@@ -14,15 +14,14 @@ public class DefaultPasswordRuleTest {
     private static Stream<Arguments> alphaRuleInputs() {
         return Stream.of(
                 Arguments.of(-1, null, "", Optional.empty()),
-                Arguments.of(0, "", "a", Optional.empty()),
-                // Arguments.of(1, "u", null, Optional.empty()),
+                Arguments.of(0, "86*D", null, Optional.empty()),
+                Arguments.of(1, "u", null, Optional.empty()),
                 Arguments.of(1, "x", "1", Optional.of(PasswordPolicyException.class)),
                 Arguments.of(1, "admin", "a7", Optional.empty()),
                 Arguments.of(1, "#@[1", "7^?B", Optional.empty()),
                 Arguments.of(1, "admin", "+bCD34^", Optional.empty()),
                 Arguments.of(2, "mrossi", "213123a21", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(Integer.MAX_VALUE, "User", "(CCi*]JSB)SI%M;", Optional.of(PasswordPolicyException.class))
-        );
+                Arguments.of(Integer.MAX_VALUE, "User", "(CCi*]JSB)SI%M;", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -51,15 +50,15 @@ public class DefaultPasswordRuleTest {
     private static Stream<Arguments> digitRuleInputs() {
         return Stream.of(
                 Arguments.of(-1, null, "", Optional.empty()),
-                Arguments.of(0, "", "word", Optional.empty()),
-                Arguments.of(1, "user", "a", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "adm1n", "w0rd", Optional.empty()),
-                Arguments.of(1, "adm#n", "3ord", Optional.empty()),
-                Arguments.of(1, "admin", "wor4", Optional.empty()),
-                // I was expecting a failure but got nothing
-                // Arguments.of(2, "u", null, Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "p", "jhbcf5vbh", Optional.of(PasswordPolicyException.class))
-        );
+                Arguments.of(Integer.MIN_VALUE, "", null, Optional.empty()),
+                Arguments.of(1, ":dU#AA", "'ZM6SQ", Optional.empty()),
+                Arguments.of(1, "nhnujj", "9", Optional.empty()),
+                Arguments.of(1, "adm1n", "password", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "z+5c0", "OU3", Optional.empty()),
+                Arguments.of(2, "admin", "t{JD6}{Y", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "p", "4hbcf5vbh", Optional.empty()),
+                Arguments.of(2, "user", "-6pg07{o", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "admin", "1234567890", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -85,24 +84,23 @@ public class DefaultPasswordRuleTest {
         testRule(rule, username, password, exception);
     }
 
-    private static Stream<Arguments> minLenRuleInputs() {
+    private static Stream<Arguments> uppercaseRuleInputs() {
         return Stream.of(
-                Arguments.of(-1, null, "a", Optional.empty()),
-                // I was expecting an Exception to be thrown, but it didn't
-                // Arguments.of(0, "", null, Optional.empty()),
-                Arguments.of(1, "u", "", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "x", "1", Optional.empty()),
-                Arguments.of(2, "xyz", "*", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "u", "@a3", Optional.empty()),
-                Arguments.of(Integer.MAX_VALUE, "admin", "1234", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "", "%&", Optional.empty())
-        );
+                Arguments.of(-1, null, "", Optional.empty()),
+                Arguments.of(0, "u", null, Optional.empty()),
+                Arguments.of(1, ")+M4[$", "\"d=$h_", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(0, "~0{H4G", "a,so-%", Optional.empty()),
+                Arguments.of(1, "Ete}\\\\6i$", "?$crsfIqd", Optional.empty()),
+                Arguments.of(2, "[4(O6g{", "?]s-H%", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "user", "=]G5#E0,(U`!", Optional.empty()),
+                Arguments.of(1, "admin", "~@#0{h4G", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "admin", "AAAAAAAH", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
-    @MethodSource("minLenRuleInputs")
-    public void testMinLenRule(
-            int minLength,
+    @MethodSource("uppercaseRuleInputs")
+    public void testUppercaseRule(
+            int uppercase,
             String username,
             String password,
             Optional<Class<Exception>> exception
@@ -110,12 +108,12 @@ public class DefaultPasswordRuleTest {
         DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
         conf.setAlphabetical(0);
         conf.setDigit(0);
+        conf.setUppercase(uppercase);
+        conf.setMinLength(0);
         conf.setLowercase(0);
         conf.setMaxLength(Integer.MAX_VALUE);
-        conf.setMinLength(minLength);
-        conf.setRepeatSame(0);
         conf.setSpecial(0);
-        conf.setUppercase(0);
+        conf.setRepeatSame(0);
         conf.setUsernameAllowed(true);
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
@@ -160,6 +158,43 @@ public class DefaultPasswordRuleTest {
         } else {
             rule.enforce(username, password);
         }
+    }
+
+    private static Stream<Arguments> minLenRuleInputs() {
+        return Stream.of(
+                Arguments.of(-1, null, "a", Optional.empty()),
+                // I was expecting an Exception to be thrown, but it didn't
+                // Arguments.of(0, "", null, Optional.empty()),
+                Arguments.of(1, "u", "", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "x", "1", Optional.empty()),
+                Arguments.of(2, "xyz", "*", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "u", "@a3", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "admin", "1234", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, "", "%&", Optional.empty())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("minLenRuleInputs")
+    public void testMinLenRule(
+            int minLength,
+            String username,
+            String password,
+            Optional<Class<Exception>> exception
+    ) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setAlphabetical(0);
+        conf.setDigit(0);
+        conf.setLowercase(0);
+        conf.setMaxLength(Integer.MAX_VALUE);
+        conf.setMinLength(minLength);
+        conf.setRepeatSame(0);
+        conf.setSpecial(0);
+        conf.setUppercase(0);
+        conf.setUsernameAllowed(true);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        testRule(rule, username, password, exception);
     }
 
     private static Stream<Arguments> maxLenRuleInputs() {
@@ -241,41 +276,7 @@ public class DefaultPasswordRuleTest {
         testRule(rule, username, password, exception);
     }
 
-    private static Stream<Arguments> uppercaseRuleInputs() {
-        return Stream.of(
-                Arguments.of(-1, null, "", Optional.empty()),
-                Arguments.of(0, "", "hgtf53JSh", Optional.empty()),
-                Arguments.of(1, "admin", "#?2", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(1, "user", "oPlà", Optional.empty()),
-                Arguments.of(1, "1", "jfHY3a#", Optional.empty()),
-                Arguments.of(2, "username", "Ah", Optional.of(PasswordPolicyException.class)),
-                // Arguments.of(2, "z", null, Optional.empty())
-                Arguments.of(2, "p", "oH638H", Optional.empty())
-        );
-    }
 
-    @ParameterizedTest
-    @MethodSource("uppercaseRuleInputs")
-    public void testUppercaseRule(
-            int uppercase,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
-    ) {
-        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
-        conf.setMinLength(0);
-        conf.setAlphabetical(0);
-        conf.setLowercase(0);
-        conf.setMaxLength(Integer.MAX_VALUE);
-        conf.setSpecial(0);
-        conf.setDigit(0);
-        conf.setUppercase(uppercase);
-        conf.setRepeatSame(0);
-        conf.setUsernameAllowed(true);
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
-    }
 
     private static Stream<Arguments> repeatSameRuleInputs() {
         return Stream.of(
