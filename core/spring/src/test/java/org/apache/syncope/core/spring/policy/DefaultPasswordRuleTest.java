@@ -199,8 +199,14 @@ public class DefaultPasswordRuleTest {
 
     private static Stream<Arguments> maxLenRuleInputs() {
         return Stream.of(
-                Arguments.of(0, null, "a", Optional.empty())
-        );
+                Arguments.of(0, null, "a", Optional.empty()),
+                Arguments.of(-1, "2", null, Optional.empty()),
+                Arguments.of(1, "", "*", Optional.empty()),
+                Arguments.of(1, "u", ",^", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "usr", "12", Optional.empty()),
+                Arguments.of(Integer.MAX_VALUE, "admin", "#".repeat(4096), Optional.empty()),
+                Arguments.of(2, "]'a3-R$", "x", Optional.empty()),
+                Arguments.of(1, "X", "#A4", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -223,25 +229,28 @@ public class DefaultPasswordRuleTest {
         conf.setUsernameAllowed(true);
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
-        if (exception.isPresent()) {
-            Assertions.assertThrows(exception.get(), () -> rule.enforce(username, password));
-        } else {
-            rule.enforce(username, password);
-        }
+        testRule(rule, username, password, exception);
     }
+
+    private static List<Character> SPECIAL = "!\"#$%&\\'()*+,-./:;<=>?@[\\\\]^_`{|}~"
+            .chars()
+            .mapToObj(c -> (char) c)
+            .toList();
 
     private static Stream<Arguments> specialRuleInput() {
         return Stream.of(
-                Arguments.of(0, List.of(), "admin", "", Optional.empty()),
-                Arguments.of(1, List.of('a', 'b', 'c', 'd', 'e', 'f'), null, "@#èg", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(-1, List.of('#', '?'), "n", "a2l", Optional.empty()),
-                 // TODO: I was expecting a failure but got nothing
-                // Arguments.of(1, List.of('?'), "", null, Optional.of(PasswordPolicyException.class))
-                Arguments.of(1, List.of('1', '2', '3'), "user", "1@asdad", Optional.empty()),
-                Arguments.of(1, List.of('#', 'à', 'ù'), "m", "nj456à", Optional.empty()),
-                Arguments.of(2, List.of('.', '-', '^', '['), "", "longpasswor[d", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(3, List.of('1', '2', 'a', 'b', '@'), "username1", "p@ssword12a", Optional.empty())
-        );
+                Arguments.of(1, List.of(), null, "a", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(0, List.of(), "", null, Optional.empty()),
+                Arguments.of(0, List.of('*', '^'), "a", "p#", Optional.empty()),
+                Arguments.of(1, SPECIAL, "#us!", "password", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, List.of('!', '"', '£'), "admin", "67buyh..!", Optional.empty()),
+                Arguments.of(2, SPECIAL, "mrossi", "#523432fsf", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, List.of('a', 'b', 'c', '1', '2'), "fverdi", "HG£abS23ù", Optional.empty()),
+                Arguments.of(1, List.of('a', 'b'), "bh2ùa", "Aword", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, List.of('a', 'a', 'a'), null, "aHJ~àF", Optional.empty()),
+                Arguments.of(1, SPECIAL, "8!3$", "", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(1, List.of('イ', 'ン', 'ス'), "user", "ンスa", Optional.empty()),
+                Arguments.of(1, List.of(' ', '\t', '\n'), null, "a strange\tpassword", Optional.empty()));
     }
 
     @ParameterizedTest
