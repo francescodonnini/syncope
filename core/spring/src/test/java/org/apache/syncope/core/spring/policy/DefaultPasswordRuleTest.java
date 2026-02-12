@@ -153,11 +153,7 @@ public class DefaultPasswordRuleTest {
         conf.setUsernameAllowed(true);
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
-        if (exception.isPresent()) {
-            Assertions.assertThrows(exception.get(), () -> rule.enforce(username, password));
-        } else {
-            rule.enforce(username, password);
-        }
+        testRule(rule, username, password, exception);
     }
 
     private static Stream<Arguments> minLenRuleInputs() {
@@ -282,15 +278,18 @@ public class DefaultPasswordRuleTest {
 
     private static Stream<Arguments> repeatSameRuleInputs() {
         return Stream.of(
-                Arguments.of(0, "", Optional.empty()),
-                Arguments.of(2, "", Optional.empty()),
-                Arguments.of(2, "abbaiare", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(3, "avellino", Optional.empty()),
-                Arguments.of(2, "pas5word", Optional.empty()),
-                Arguments.of(3, "iNteRessan3t", Optional.empty()),
-                Arguments.of(3, "wrooong", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(2, "llegar", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(3, "faalse positive", Optional.empty())
+                Arguments.of(0, null, "", Optional.empty()),
+                Arguments.of(-1, "", "aaa", Optional.empty()),
+                Arguments.of(2, "11", null, Optional.empty()),
+                Arguments.of(2, "admin", "wword", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "user", "distinct", Optional.empty()),
+                Arguments.of(2, "82zUfnHCf", "8M3gURAJJ", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(2, "jr3EntuYl", "aRRN", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(3, "u2gPPj1h0s", "qqf5X", Optional.empty()),
+                Arguments.of(3, "z25yyyurRS", "coodee", Optional.empty()),
+                Arguments.of(3, "mH6%", "AAadR62ns", Optional.empty()),
+                Arguments.of(2, "mrossi", "sec#et!", Optional.empty()),
+                Arguments.of(2, "6x", "gH°°ìl°°°", Optional.of(PasswordPolicyException.class))
         );
     }
 
