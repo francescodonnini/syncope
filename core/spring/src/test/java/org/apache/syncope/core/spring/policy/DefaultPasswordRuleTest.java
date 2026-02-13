@@ -6,6 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -274,18 +275,17 @@ public class DefaultPasswordRuleTest {
         testRule(rule, username, password, exception);
     }
 
-
-
     private static Stream<Arguments> repeatSameRuleInputs() {
         return Stream.of(
                 Arguments.of(0, null, "", Optional.empty()),
                 Arguments.of(-1, "", "aaa", Optional.empty()),
+                // Arguments.of(1, "6%g", "klR2", Optional.of(IllegalStateException.class)),
                 Arguments.of(2, "11", null, Optional.empty()),
                 Arguments.of(2, "admin", "wword", Optional.of(PasswordPolicyException.class)),
                 Arguments.of(2, "user", "distinct", Optional.empty()),
                 Arguments.of(2, "82zUfnHCf", "8M3gURAJJ", Optional.of(PasswordPolicyException.class)),
                 Arguments.of(2, "jr3EntuYl", "aRRN", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(3, "u2gPPj1h0s", "qqf5X", Optional.empty()),
+                Arguments.of(3, "u2gPPj1h0s", "qqf5Xq", Optional.empty()),
                 Arguments.of(3, "z25yyyurRS", "coodee", Optional.empty()),
                 Arguments.of(3, "mH6%", "AAadR62ns", Optional.empty()),
                 Arguments.of(2, "mrossi", "sec#et!", Optional.empty()),
@@ -358,11 +358,154 @@ public class DefaultPasswordRuleTest {
         testRule(rule, username, password, exception);
     }
 
+    private static Stream<Arguments> wordsNotPermittedRuleInputs() {
+        return Stream.of(
+                Arguments.of(List.of(), null, "p", Optional.empty()),
+                Arguments.of(split("abcdefghijklmnopqrstuvxyz"), "", "w", Optional.empty()),
+                // Parole non permesse sono tutte alfabetiche, la password è maiuscola
+                Arguments.of(split("abcdefghijklmnopqrstuvxyz"), "", "A", Optional.of(PasswordPolicyException.class)),
+                // Parole non permesse sono tutte alfabetiche
+                Arguments.of(split("abcdefghijklmnopqrstuvwxyz"), "admin", "w", Optional.of(PasswordPolicyException.class)),
+                // Parole non permesse sono tutti numeri
+                Arguments.of(split("1234567890"), "user", "1", Optional.of(PasswordPolicyException.class)),
+                // Parole non permesse sono tutti numeri, la password ne è sprovvista, lo username no
+                Arguments.of(split("1234567890"), "0LtG", "dj", Optional.empty()),
+                // Parole non permesse sono simboli stampabili (né lettere né numeri)
+                Arguments.of(split("!\"#$%&\\'()*+,-./:;<=>?@[\\\\]^_`{|}~ \\t\\n"), "KLLm5", null, Optional.empty()),
+                Arguments.of(split("!\"#$%&\\'()*+,-./:;<=>?@[\\\\]^_`{|}~ \\t\\n"), "zqqp", "T4AH0", Optional.of(PasswordPolicyException.class)),
+                // La parola compare all'inizio
+                Arguments.of(List.of("Hy}'_"), "+K4", "hY}'_!", Optional.of(PasswordPolicyException.class)),
+                // La parola compare alla fine
+                Arguments.of(List.of("v~r2i "), "%4", "hY}'_!v~r2i ", Optional.of(PasswordPolicyException.class)),
+                // La parola è nel mezzo
+                Arguments.of(List.of("v~r2i ", "GM2+", "Hy}'_"), "%", "hY}'_\"Hy}'_\"!v~r2i ", Optional.of(PasswordPolicyException.class)),
+                // Le parole hanno una corrispondenza parziale con una sottostringa della password
+                Arguments.of(List.of(")", ";eS|", "6*3<", "det"), "", ";eS mselet6*3", Optional.empty()),
+                // La parola offensiva è la prima
+                Arguments.of(List.of(")", ";eS|", "6*3<", "det"), "", ")\\\\cS)6\n", Optional.of(PasswordPolicyException.class)),
+                // La parola offensiva è l'ultima
+                Arguments.of(List.of(")", ";eS|", "6*3<", "det"), "", "zYsxt:dedet", Optional.of(PasswordPolicyException.class)),
+                // Una parola proibita è sotto-stringa di un'altra parola proibita
+                Arguments.of(List.of(")", ";eS", ";eS|", "det"), ")", "jh7;e;eS83", Optional.of(PasswordPolicyException.class)),
+                // Password corretta, username non contiene parola proibita
+                Arguments.of(List.of(")", ";eS", ";eS|", "det"), "det", ",yE<B+XJ>AU", Optional.empty()));
+    }
+
+    private static List<String> split(String s) {
+        return split(s, "");
+    }
+
+    private static List<String> split(String s, String delimiter) {
+        return Arrays.stream(s.split(delimiter)).toList();
+    }
+
+    @ParameterizedTest
+    @MethodSource("wordsNotPermittedRuleInputs")
+    public void testWordsNotPermittedRule(
+            List<String> words,
+            String username,
+            String password,
+            Optional<Class<Exception>> exception
+    ) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setMinLength(0);
+        conf.setAlphabetical(0);
+        conf.setLowercase(0);
+        conf.setMaxLength(Integer.MAX_VALUE);
+        conf.setSpecial(0);
+        conf.setDigit(0);
+        conf.setUppercase(0);
+        conf.setRepeatSame(0);
+        conf.setUsernameAllowed(true);
+        conf.getWordsNotPermitted().addAll(words);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        testRule(rule, username, password, exception);
+    }
+
+    private static Stream<Arguments> validMixedRulesInput() {
+        return Stream.of(
+                Arguments.of(0, 0, 0, 12, 11, 0, 0, List.of(), 0, true, List.of(), "user", "password1231", Optional.empty())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("validMixedRulesInput")
+    public void testValidMixedRules(
+            int alpha,
+            int digit,
+            int lower,
+            int minLen,
+            int maxLen,
+            int repeat,
+            int special,
+            List<Character> specialChars,
+            int upper,
+            boolean usernameAllowed,
+            List<String> wordsNotPermitted,
+            String username,
+            String password,
+            Optional<Class<Exception>> exception) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setAlphabetical(alpha);
+        conf.setDigit(digit);
+        conf.setLowercase(lower);
+        conf.setMinLength(minLen);
+        conf.setMaxLength(maxLen);
+        conf.setRepeatSame(repeat);
+        conf.setSpecial(special);
+        conf.getSpecialChars().addAll(specialChars);
+        conf.setUppercase(upper);
+        conf.setUsernameAllowed(usernameAllowed);
+        conf.getWordsNotPermitted().addAll(wordsNotPermitted);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        testRule(rule, username, password, exception);
+    }
+
     private void testRule(DefaultPasswordRule rule, String username, String password, Optional<Class<Exception>> exception) {
         if (exception.isPresent()) {
             Assertions.assertThrows(exception.get(), () -> rule.enforce(username, password));
         } else {
             rule.enforce(username, password);
         }
+    }
+
+    private static Stream<Arguments> invalidMixedRulesInput() {
+        return Stream.of(
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidMixedRulesInput")
+    public void testValidMixedRules(
+            int alpha,
+            int digit,
+            int lower,
+            int minLen,
+            int maxLen,
+            int repeat,
+            int special,
+            List<Character> specialChars,
+            int upper,
+            boolean usernameAllowed,
+            List<String> wordsNotPermitted,
+            String username,
+            String password) {
+        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
+        conf.setAlphabetical(alpha);
+        conf.setDigit(digit);
+        conf.setLowercase(lower);
+        conf.setMinLength(minLen);
+        conf.setMaxLength(maxLen);
+        conf.setRepeatSame(repeat);
+        conf.setSpecial(special);
+        conf.getSpecialChars().addAll(specialChars);
+        conf.setUppercase(upper);
+        conf.setUsernameAllowed(usernameAllowed);
+        conf.getWordsNotPermitted().addAll(wordsNotPermitted);
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+        Assertions.assertDoesNotThrow(() -> rule.enforce(username, password));
     }
 }
