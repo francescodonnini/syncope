@@ -19,10 +19,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class BatchPayloadParserTest {
-    // The first batch of tests focuses on the parser extrapolating the correct number of
-    // parts:
-
-    // only the preamble is present, expecting 0 parts
     private static final BatchPayloadBuilder PART_00 = BatchPayloadBuilder.builder()
             .boundary("b")
             .line("POST /batch HTTP/1.1")
@@ -222,6 +218,16 @@ public class BatchPayloadParserTest {
             .endPart()
             .closingDelimiter();
 
+    private static final BatchPayloadBuilder BOUND_10 = BatchPayloadBuilder.builder()
+            .boundary("a really long boundary, containing a number of characters greater than 70!11!1!")
+            .delimiter()
+            .line()
+            .beginPart()
+                .line("The question is:")
+                .line("is this parser compliant to RFC 2046?")
+            .endPart()
+            .closingDelimiter();
+
     private static Stream<Arguments> inputs() {
         return Stream.of(
                 Arguments.of(PART_00, Optional.empty(), Optional.of(IllegalArgumentException.class)),
@@ -240,8 +246,27 @@ public class BatchPayloadParserTest {
                 Arguments.of(BOUND_06, Optional.of(1), Optional.empty()),
                 Arguments.of(BOUND_07, Optional.of(1), Optional.empty()),
                 Arguments.of(BOUND_08, Optional.of(2), Optional.empty()),
-                Arguments.of(BOUND_09, Optional.of(1), Optional.empty())
-                );
+                Arguments.of(BOUND_09, Optional.of(1), Optional.empty()),
+                Arguments.of(BOUND_10, Optional.of(1), Optional.empty())
+        );
+    }
+
+    @Test
+    public void printInputs() {
+        int i = 1;
+        for (Arguments argument : inputs().toList()) {
+            StringBuilder s = new StringBuilder();
+            s.append("\\begin{figure}[H]\n");
+            s.append("\t\\centering\n");
+            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
+            s.append(argument.get()[0]).append('\n');
+            s.append("\t\\end{lstlisting}\n");
+            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
+            s.append("\\end{figure}\n");
+            System.out.println(s.toString());
+            i += 1;
+        }
     }
 
     @ParameterizedTest
@@ -301,7 +326,7 @@ public class BatchPayloadParserTest {
         return t;
     }
 
-    private static Stream<Arguments> httpInputs() {
+    private static Stream<Arguments> httpRequestInputs() {
         return Stream.of(
                 Arguments.of(
                         BatchPayloadBuilder.builder()
@@ -377,8 +402,8 @@ public class BatchPayloadParserTest {
     }
 
     @ParameterizedTest
-    @MethodSource("httpInputs")
-    public void testHttpPayloads(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
+    @MethodSource("httpRequestInputs")
+    public void testHttpRequests(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
         List<BatchRequestItem> actualBatch = BatchPayloadParser.parse(new ByteArrayInputStream(builder.create()), mediaType(builder.getBoundary()), new BatchRequestItem());
         Assertions.assertEquals(expectedBatch.size(), actualBatch.size());
         for (int i = 0; i < expectedBatch.size(); i++) {
