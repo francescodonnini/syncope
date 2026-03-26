@@ -550,6 +550,24 @@ public class BatchPayloadParserTest {
         }
     }
 
+    @Test
+    public void printHttpInputs() {
+        int i = 1;
+        for (Arguments argument : httpRequestInputs().toList()) {
+            StringBuilder s = new StringBuilder();
+            s.append("\\begin{figure}[H]\n");
+            s.append("\t\\centering\n");
+            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
+            s.append(argument.get()[0]).append('\n');
+            s.append("\t\\end{lstlisting}\n");
+            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
+            s.append("\\end{figure}\n");
+            System.out.println(s.toString());
+            i += 1;
+        }
+    }
+
     private MediaType mediaType(String boundary) {
         MediaType t = mock(MediaType.class);
         when(t.getParameters()).thenReturn(Map.of("boundary", boundary));
