@@ -34,7 +34,7 @@ public class BatchRequestItemBuilder {
     }
 
     public BatchRequestItemBuilder content(String content) {
-        item.setContent(content);
+        this.content.append(content);
         return this;
     }
 
@@ -53,9 +53,7 @@ public class BatchRequestItemBuilder {
     }
 
     public BatchRequestItem create() {
-        if (!content.isEmpty()) {
-            item.setContent(content.toString());
-        }
+        item.setContent(content.toString());
         return item;
     }
 }

@@ -2,6 +2,7 @@ package org.apache.syncope.common.rest.api.batch;
 
 import jakarta.ws.rs.core.MediaType;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -19,10 +20,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class BatchPayloadParserTest {
-    // The first batch of tests focuses on the parser extrapolating the correct number of
-    // parts:
-
-    // only the preamble is present, expecting 0 parts
     private static final BatchPayloadBuilder PART_00 = BatchPayloadBuilder.builder()
             .boundary("b")
             .line("POST /batch HTTP/1.1")
@@ -222,6 +219,16 @@ public class BatchPayloadParserTest {
             .endPart()
             .closingDelimiter();
 
+    private static final BatchPayloadBuilder BOUND_10 = BatchPayloadBuilder.builder()
+            .boundary("a really long boundary, containing a number of characters greater than 70!11!1!")
+            .delimiter()
+            .line()
+            .beginPart()
+                .line("The question is:")
+                .line("is this parser compliant to RFC 2046?")
+            .endPart()
+            .closingDelimiter();
+
     private static Stream<Arguments> inputs() {
         return Stream.of(
                 Arguments.of(PART_00, Optional.empty(), Optional.of(IllegalArgumentException.class)),
@@ -240,8 +247,27 @@ public class BatchPayloadParserTest {
                 Arguments.of(BOUND_06, Optional.of(1), Optional.empty()),
                 Arguments.of(BOUND_07, Optional.of(1), Optional.empty()),
                 Arguments.of(BOUND_08, Optional.of(2), Optional.empty()),
-                Arguments.of(BOUND_09, Optional.of(1), Optional.empty())
-                );
+                Arguments.of(BOUND_09, Optional.of(1), Optional.empty()),
+                Arguments.of(BOUND_10, Optional.of(1), Optional.empty())
+        );
+    }
+
+    @Test
+    public void printInputs() {
+        int i = 1;
+        for (Arguments argument : inputs().toList()) {
+            StringBuilder s = new StringBuilder();
+            s.append("\\begin{figure}[H]\n");
+            s.append("\t\\centering\n");
+            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
+            s.append(argument.get()[0]).append('\n');
+            s.append("\t\\end{lstlisting}\n");
+            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
+            s.append("\\end{figure}\n");
+            System.out.println(s.toString());
+            i += 1;
+        }
     }
 
     @ParameterizedTest
@@ -295,81 +321,78 @@ public class BatchPayloadParserTest {
         );
     }
 
-    private MediaType mediaType(String boundary) {
-        MediaType t = mock(MediaType.class);
-        when(t.getParameters()).thenReturn(Map.of("boundary", boundary));
-        return t;
-    }
-
-    private static Stream<Arguments> httpInputs() {
+    private static Stream<Arguments> httpRequestInputs() {
         return Stream.of(
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("batch_d1befdc3-0a33-4463-8361??")
+                                .boundary("batch_555806432")
                                 .delimiter()
                                 .line()
-                                .line("POST /batch HTTP/1.1")
-                                .line("Content-Type:")
-                                .line()
-                                .text("{}")
-                                .delimiter()
-                                .line()
-                                .line("DELETE /path/to/point?k=v HTTP/1.1")
-                                .line("X-SomeCustomKey:\t\t\ta")
-                                .line()
-                                .line("body spread")
-                                .line("over multiple lines")
-                                .delimiter()
-                                .line()
-                                .line("PATCH /some/uri?k1=v1&k2=v2 HTTP/1.1")
+                                .line("Content-Type: application/http")
                                 .line("Content-Transfer-Encoding: binary")
-                                .text("""
-                                      Here it is a content, batch_d1befdc3-0a33-4463-8361??
-                                      --batch_d1befdc3-0a33-4463-8361?
-                                      batch_d1befdc3-0a33-4463-8361??
-                                      --batch_d1befdc3-a33-4463-8361??
-                                      """)
+                                .line()
+                                .line("POST /users HTTP/1.1")
+                                .line("Content-Type: application/json")
+                                .line()
+                                .line("{\"firstname\":\"mario\",\"lastname\":\"rossi\"}")
+                                .delimiter()
+                                .line()
+                                .line("PATCH /groups?name=admin HTTP/1.1")
                                 .closingDelimiter(),
                         List.of(
                                 BatchRequestItemBuilder.builder()
-                                        .method("POST").uri("/batch")
-                                        .header("Content-Type", "")
-                                        .content("{}")
+                                        .method("POST")
+                                        .uri("/users")
+                                        .header("Content-Type", "application/json")
+                                        .line("{\"firstname\":\"mario\",\"lastname\":\"rossi\"}")
                                         .create(),
                                 BatchRequestItemBuilder.builder()
-                                        .method("DELETE").uri("/path/to/point").query("k=v")
-                                        .header("X-SomeCustomKey", "a")
-                                        .content("""
-                                                body spread\r
-                                                over multiple lines\r
-                                                """)
-                                        .create(),
-                                BatchRequestItemBuilder.builder()
-                                        .method("PATCH").uri("/some/uri").query("k1=v1&k2=v2")
-                                        .header("Content-Transfer-Encoding", "binary")
-                                        .content("""
-                                                  Here it is a content, batch_d1befdc3-0a33-4463-8361??
-                                                  --batch_d1befdc3-0a33-4463-8361?
-                                                  batch_d1befdc3-0a33-4463-8361??
-                                                  --batch_d1befdc3-a33-4463-8361??
-                                                  """)
+                                        .method("PATCH")
+                                        .uri("/groups")
+                                        .query("name=admin")
                                         .create()
                         )
                 ),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("#?1")
+                                .boundary("my-boundary")
                                 .delimiter()
                                 .line()
-                                .line("POST /batch HTTP/1.1")
-                                .line("Content-Type: text/plain")
-                                .text("")
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("DELETE /anyObjects?k1=v1&k2=v2 HTTP/1.1")
+                                .line("X-List: val1, val2, val3")
+                                .line()
+                                .line("Multi-line")
+                                .text("content body")
                                 .closingDelimiter(),
                         List.of(
                                 BatchRequestItemBuilder.builder()
-                                        .method("POST").uri("/batch")
-                                        .header("Content-Type", "text/plain")
-                                        .content("")
+                                        .method("DELETE")
+                                        .uri("/anyObjects")
+                                        .query("k1=v1&k2=v2")
+                                        .header("X-List", "val1")
+                                        .header("X-List", "val2")
+                                        .header("X-List", "val3")
+                                        .content("Multi-line\r\ncontent body")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary(" %6&")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("GET /users? HTTP/1.1")
+                                .line("Malformed Header Without Colon")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchRequestItemBuilder.builder()
+                                        .content("Malformed Header Without Colon\r\n")
                                         .create()
                         )
                 )
@@ -377,9 +400,13 @@ public class BatchPayloadParserTest {
     }
 
     @ParameterizedTest
-    @MethodSource("httpInputs")
-    public void testHttpPayloads(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
-        List<BatchRequestItem> actualBatch = BatchPayloadParser.parse(new ByteArrayInputStream(builder.create()), mediaType(builder.getBoundary()), new BatchRequestItem());
+    @MethodSource("httpRequestInputs")
+    public void testHttpRequests(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
+        List<BatchRequestItem> actualBatch = BatchPayloadParser.parse(
+                new ByteArrayInputStream(builder.create()),
+                mediaType(builder.getBoundary()),
+                new BatchRequestItem());
+
         Assertions.assertEquals(expectedBatch.size(), actualBatch.size());
         for (int i = 0; i < expectedBatch.size(); i++) {
             BatchRequestItem expected = expectedBatch.get(i);
@@ -387,8 +414,168 @@ public class BatchPayloadParserTest {
             Assertions.assertEquals(expected.getMethod(), actual.getMethod());
             Assertions.assertEquals(expected.getRequestURI(), actual.getRequestURI());
             Assertions.assertEquals(expected.getQueryString(), actual.getQueryString());
-            Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
-            Assertions.assertEquals(expected.getContent(), actual.getContent());
+            assertEquals(expected, actual);
         }
+    }
+
+    private static Stream<Arguments> httpResponseInputs() {
+        return Stream.of(
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-boundary")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line("Content-Type: application/json")
+                                .line()
+                                .line("{\"status\":\"success\",")
+                                .text("\"code\":200}")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 23$ OK")
+                                .line()
+                                .text("Content-Type: application/json")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .status(200)
+                                        .header("Content-Type", "application/json")
+                                        .content("{\"status\":\"success\",\r\n\"code\":200}")
+                                        .create(),
+                                BatchResponseItemBuilder.builder()
+                                        .content("Content-Type: application/json")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-boundary")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 204 No Content")
+                                .line()
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .status(204)
+                                        .content("")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-boundary")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 OK OK")
+                                .line("X-Tags: tagA, tagB")
+                                .line("Content-Type:\t\tapplication/json")
+                                .line()
+                                .text("Single-line payload")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .header("X-Tags", "tagA")
+                                        .header("X-Tags", "tagB")
+                                        .header("Content-Type", "application/json")
+                                        .content("Single-line payload")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-boundary")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 400 Bad Request")
+                                .line("Invalid-Header-Format")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .status(400)
+                                        .content("Invalid-Header-Format\r\n")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("boundary")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 2O0 OK")
+                                .line()
+                                .text("Single-line payload")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .content("Single-line payload")
+                                        .create()
+                        )
+                )
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("httpResponseInputs")
+    public void testHttpResponses(BatchPayloadBuilder builder, List<BatchResponseItem> expectedBatch) throws IOException {
+        List<BatchResponseItem> actualBatch = BatchPayloadParser.parse(
+                new ByteArrayInputStream(builder.create()),
+                mediaType(builder.getBoundary()),
+                new BatchResponseItem());
+
+        Assertions.assertEquals(expectedBatch.size(), actualBatch.size());
+        for (int i = 0; i < expectedBatch.size(); ++i) {
+            BatchResponseItem actual = actualBatch.get(i);
+            BatchResponseItem expected = expectedBatch.get(i);
+            Assertions.assertEquals(expected.getStatus(), actual.getStatus());
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    public void printHttpInputs() {
+        int i = 1;
+        for (Arguments argument : httpRequestInputs().toList()) {
+            StringBuilder s = new StringBuilder();
+            s.append("\\begin{figure}[H]\n");
+            s.append("\t\\centering\n");
+            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
+            s.append(argument.get()[0]).append('\n');
+            s.append("\t\\end{lstlisting}\n");
+            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
+            s.append("\\end{figure}\n");
+            System.out.println(s.toString());
+            i += 1;
+        }
+    }
+
+    private MediaType mediaType(String boundary) {
+        MediaType t = mock(MediaType.class);
+        when(t.getParameters()).thenReturn(Map.of("boundary", boundary));
+        return t;
+    }
+
+    private void assertEquals(BatchItem expected, BatchItem actual) {
+        Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
+        Assertions.assertEquals(expected.getContent(), actual.getContent());
     }
 }
