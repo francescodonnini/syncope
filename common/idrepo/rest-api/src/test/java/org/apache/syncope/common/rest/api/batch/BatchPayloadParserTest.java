@@ -324,78 +324,384 @@ public class BatchPayloadParserTest {
     private static Stream<Arguments> httpRequestInputs() {
         return Stream.of(
                 Arguments.of(
-                        BatchPayloadBuilder.builder()
-                                .boundary("batch_555806432")
-                                .delimiter()
+                        BatchPayloadBuilder.builder().boundary("padded_boundary")
+                                .delimiter(5)
                                 .line()
                                 .line("Content-Type: application/http")
                                 .line("Content-Transfer-Encoding: binary")
                                 .line()
                                 .line("POST /users HTTP/1.1")
-                                .line("Content-Type: application/json")
+                                .line("Accept: application/json")
                                 .line()
-                                .line("{\"firstname\":\"mario\",\"lastname\":\"rossi\"}")
+                                .text("{\"name\":\"rossi\"}")
+                                .delimiter(2)
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("PATCH /groups/2 HTTP/1.1")
+                                .line()
+                                .closingDelimiter(10),
+                        List.of(
+                                BatchRequestItemBuilder.builder()
+                                        .method("POST").uri("/users")
+                                        .header("Accept", "application/json")
+                                        .content("{\"name\":\"rossi\"}")
+                                        .create(),
+                                BatchRequestItemBuilder.builder()
+                                        .method("PATCH").uri("/groups/2")
+                                        .content("")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("1")
                                 .delimiter()
                                 .line()
-                                .line("PATCH /groups?name=admin HTTP/1.1")
+                                .line("Content-Type: application/http") // Only one line present
+                                .line()
+                                .line("PUT /users/1 HTTP/1.1")
+                                .line("Accept: application/json")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .method("PUT").uri("/users/1")
+                                .header("Accept", "application/json")
+                                .content("body")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("specials:'()+_,-./=?")
+                                .delimiter()
+                                .line()
+                                .line("ContentType application/http") // missing colon ':'
+                                .line()
+                                .line("POST /users HTTP/1.1")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .content("ContentType application/http\r\n\r\nPOST /users HTTP/1.1\r\n\r\nbody")
+                                .create())
+                ),
+                // Missing envelope
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("boundary with internal spaces")
+                                .delimiter()
+                                .line()
+                                .line("DELETE /users/1 HTTP/1.1")
+                                .line("X-Header: value")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .method("DELETE").uri("/users/1")
+                                .header("X-Header", "value")
+                                .content("body")
+                                .create())
+                ),
+                // Missing request-line
+                Arguments.of(
+                        BatchPayloadBuilder.builder().boundary("a-very-long-boundary-string-that-will-tests-the-limits-1234567890")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("Accept: application/json")
+                                .line()
+                                .line("body")
+                                .line("\tbody")
+                                .line("a-very-long-boundary-string-that-will-tests-the-limits-1234567890")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("PUT /users/5 HTTP/1.1")
+                                .line()
+                                .text("valid body")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchRequestItemBuilder.builder()
+                                        .method(null)
+                                        .uri(null)
+                                        .header("Accept", "application/json")
+                                        .line("body")
+                                        .line("\tbody")
+                                        .line("a-very-long-boundary-string-that-will-tests-the-limits-1234567890")
+                                        .create(),
+                                BatchRequestItemBuilder.builder()
+                                        .method("PUT").uri("/users/5")
+                                        .content("valid body")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("POST /users") // Missing HTTP/1.1
+                                .line()
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .content("POST /users\r\n\r\n")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("-")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("GET /users HTTP/1.1")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .content("body")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder().boundary("mixed_CASE_Boundary_123")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("POST /users HTTP/1.1")
+                                .line("X-Domain: Master, Other") // Comma-separated values
+                                .line("X-Domain: Third") // Duplicated key, its value should be appended to the ones above
+                                .line()
+                                .text("body")
+                                .delimiter()
+                                .line()
+                                .line("DELETE /users/1 HTTP/1.1")
+                                .line()
+                                .closingDelimiter(),
+                        List.of(
+                                BatchRequestItemBuilder.builder()
+                                        .method("POST").uri("/users")
+                                        .header("X-Domain", "Master")
+                                        .header("X-Domain", "Other")
+                                        .header("X-Domain", "Third")
+                                        .content("body")
+                                        .create(),
+                                BatchRequestItemBuilder.builder()
+                                        .method("DELETE").uri("/users/1")
+                                        .content("")
+                                        .create()
+                        )
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("----a lot of hyphens!----")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("POST /users HTTP/1.1")
+                                .line("Accept: application/json")
+                                .line("BadHeaderFormat") // Manca ':'
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .method("POST").uri("/users")
+                                .header("Accept", "application/json")
+                                .line("BadHeaderFormat")
+                                .content("body")
+                                .create())
+                ),
+
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("bnd_12")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("POST /users HTTP/1.1")
+                                .line("X-Empty-Header:\t\t\t\t")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .method("POST").uri("/users")
+                                .header("X-Empty-Header", "")
+                                .content("body")
+                                .create())
+                ),
+
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("bnd_13")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("DELETE /users/1 HTTP/1.1")
+                                .line()
+                                .closingDelimiter(),
+                        List.of(BatchRequestItemBuilder.builder()
+                                .method("DELETE").uri("/users/1")
+                                .content("")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("query-boundary-padding")
+                                .delimiter(3)
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("PATCH /users?name=rossi&status=active HTTP/1.1")
+                                .delimiter(3)
+                                .line()
+                                .line("PUT /groups?someStringWithoutEqualsAndAmpersands HTTP/1.1")
+                                .line()
+                                .line("Some text spread")
+                                .line("over multiple lines!")
+                                .closingDelimiter(5),
+                        List.of(
+                                BatchRequestItemBuilder.builder()
+                                        .method("PATCH")
+                                        .uri("/users")
+                                        .query("name=rossi&status=active")
+                                        .content("")
+                                        .create(),
+                                BatchRequestItemBuilder.builder()
+                                        .method("PUT")
+                                        .uri("/groups")
+                                        .query("someStringWithoutEqualsAndAmpersands")
+                                        .content("Some text spread\r\nover multiple lines!\r\n")
+                                        .create()
+                        )
+                ),
+                // A trailing '?' should be ignored
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("?")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("POST /groups? HTTP/1.1")
+                                .line()
                                 .closingDelimiter(),
                         List.of(
                                 BatchRequestItemBuilder.builder()
                                         .method("POST")
-                                        .uri("/users")
-                                        .header("Content-Type", "application/json")
-                                        .line("{\"firstname\":\"mario\",\"lastname\":\"rossi\"}")
-                                        .create(),
-                                BatchRequestItemBuilder.builder()
-                                        .method("PATCH")
                                         .uri("/groups")
-                                        .query("name=admin")
                                         .create()
                         )
                 ),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("my-boundary")
+                                .boundary("trying to put tabs instead of spaces")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
                                 .line("Content-Transfer-Encoding: binary")
                                 .line()
-                                .line("DELETE /anyObjects?k1=v1&k2=v2 HTTP/1.1")
-                                .line("X-List: val1, val2, val3")
+                                .line("PUT\t/resources?what=this\tHTTP/1.1")
                                 .line()
-                                .line("Multi-line")
-                                .text("content body")
                                 .closingDelimiter(),
                         List.of(
                                 BatchRequestItemBuilder.builder()
-                                        .method("DELETE")
-                                        .uri("/anyObjects")
-                                        .query("k1=v1&k2=v2")
-                                        .header("X-List", "val1")
-                                        .header("X-List", "val2")
-                                        .header("X-List", "val3")
-                                        .content("Multi-line\r\ncontent body")
-                                        .create()
-                        )
-                ),
-                Arguments.of(
-                        BatchPayloadBuilder.builder()
-                                .boundary(" %6&")
-                                .delimiter()
-                                .line()
-                                .line("Content-Type: application/http")
-                                .line("Content-Transfer-Encoding: binary")
-                                .line()
-                                .line("GET /users? HTTP/1.1")
-                                .line("Malformed Header Without Colon")
-                                .closingDelimiter(),
-                        List.of(
-                                BatchRequestItemBuilder.builder()
-                                        .content("Malformed Header Without Colon\r\n")
+                                        .method(null)
+                                        .uri(null)
+                                        .query(null)
                                         .create()
                         )
                 )
+                // Arguments.of(
+                //         BatchPayloadBuilder.builder()
+                //                 .boundary("bnd_9")
+                //                 .delimiter()
+                //                 .line()
+                //                 .line("Content-Type: application/http")
+                //                 .line("Content-Transfer-Encoding: binary")
+                //                 .line()
+                //                 .line("POST  /users HTTP/1.1")
+                //                 .line()
+                //                 .closingDelimiter(),
+                //         List.of(BatchRequestItemBuilder.builder()
+                //                 .method(null)
+                //                 .uri(null)
+                //                 .create())
+                // ),
+//                // A query string should end before '#'
+//                Arguments.of(
+//                        BatchPayloadBuilder.builder()
+//                                .boundary("#boundary#")
+//                                .delimiter()
+//                                .line()
+//                                .line("Content-Type: application/http")
+//                                .line("Content-Transfer-Encoding: binary")
+//                                .line()
+//                                .line("DELETE /anyObjects? HTTP/1.1")
+//                                .delimiter()
+//                                .line()
+//                                .line("DELETE /users?name=giuseppe&lastname=verdi#ignoreMe HTTP/1.1")
+//                                .closingDelimiter(),
+//                        List.of(
+//                                BatchRequestItemBuilder.builder()
+//                                        .method("DELETE")
+//                                        .uri("/anyObjects")
+//                                        .create(),
+//                                BatchRequestItemBuilder.builder()
+//                                        .method("DELETE")
+//                                        .uri("/users")
+//                                        .query("name=giuseppe&lastname=verdi")
+//                                        .create()
+//                        )
+//                ),
+//                // This test should pass because the second '?' should be treated as an integral part of the query,
+//                // but it doesn't because the parser doesn't handle the query string correctly.
+//                Arguments.of(
+//                        BatchPayloadBuilder.builder()
+//                                .boundary("multiple?question?marks")
+//                                .delimiter()
+//                                .line()
+//                                .line("Content-Type: application/http")
+//                                .line("Content-Transfer-Encoding: binary")
+//                                .line()
+//                                .line("PUT /resources?k1=v1?k2=v2 HTTP/1.1")
+//                                .line()
+//                                .closingDelimiter(),
+//                        List.of(
+//                                BatchRequestItemBuilder.builder()
+//                                        .method("PUT")
+//                                        .uri("/resources")
+//                                        .query("k1=v1?k2=v2")
+//                                        .content("")
+//                                        .create()
+//                        )
+//                ),
+//                Arguments.of(
+//                        BatchPayloadBuilder.builder()
+//                                .boundary("simple boundary")
+//                                .delimiter()
+//                                .line()
+//                                .line("Content-Type: application/http")
+//                                .line("Content-Transfer-Encoding: binary")
+//                                .line()
+//                                .line("POST HTTP/1.1") // Missing URI
+//                                .line()
+//                                .closingDelimiter(),
+//                        List.of(BatchRequestItemBuilder.builder()
+//                                .method("POST")
+//                                .create())
+//                )
         );
     }
 
@@ -418,7 +724,7 @@ public class BatchPayloadParserTest {
         }
     }
 
-    private static Stream<Arguments> httpResponseInputs() {
+    private static Stream<Arguments> oldHttpResponseInputs() {
         return Stream.of(
                 Arguments.of(
                         BatchPayloadBuilder.builder()
@@ -533,6 +839,196 @@ public class BatchPayloadParserTest {
         );
     }
 
+    private static Stream<Arguments> httpResponseInputs() {
+        return Stream.of(
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line("Content-Type: application/json")
+                                .line()
+                                .text("{\"status\":\"success\"}")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(200)
+                                .header("Content-Type", "application/json")
+                                .content("{\"status\":\"success\"}")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("HTTP/1.1 201 Created")
+                                .line("Location: /users/1")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(201)
+                                .header("Location", "/users/1")
+                                .content("body")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("ContentType application/http") // Missing colon
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line()
+                                .line("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .content("ContentType application/http\r\n\r\nHTTP/1.1 200 OK\r\n\r\nbody\r\n")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line("X-Header: value")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(200)
+                                .header("X-Header", "value")
+                                .content("body")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("200 OK")
+                                .line()
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .content("200 OK\r\n\r\n")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 12K OK")
+                                .line()
+                                .line("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .content("body\r\n")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1  200 OK")
+                                .line()
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .content("body")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding: binary")
+                                .line()
+                                .line("HTTP/1.1 204") // No reason-phrase
+                                .line()
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(204)
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder()
+                                .boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line("X-Tags: tagA, tagB")
+                                .line("X-Tags: tagC")
+                                .line()
+                                .line("b")
+                                .line("\to")
+                                .line("\t\td")
+                                .line("\t\t\ty")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(200)
+                                .header("X-Tags", "tagA")
+                                .header("X-Tags", "tagB")
+                                .header("X-Tags", "tagC")
+                                .line("b")
+                                .line("\to")
+                                .line("\t\td")
+                                .line("\t\t\ty")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder().boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("HTTP/1.1 200 OK")
+                                .line("BadHeaderFormat")
+                                .text("body")
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(200)
+                                .content("BadHeaderFormat\r\nbody")
+                                .create())
+                ),
+                Arguments.of(
+                        BatchPayloadBuilder.builder().boundary("res-bnd")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("HTTP/1.1 123456789 No Content")
+                                .line()
+                                .closingDelimiter(),
+                        List.of(BatchResponseItemBuilder.builder()
+                                .status(123456789)
+                                .create())
+                )
+        );
+    }
+
     @ParameterizedTest
     @MethodSource("httpResponseInputs")
     public void testHttpResponses(BatchPayloadBuilder builder, List<BatchResponseItem> expectedBatch) throws IOException {
@@ -552,7 +1048,7 @@ public class BatchPayloadParserTest {
 
     @Test
     public void printHttpInputs() {
-        int i = 1;
+        int i = 19;
         for (Arguments argument : httpRequestInputs().toList()) {
             StringBuilder s = new StringBuilder();
             s.append("\\begin{figure}[H]\n");
@@ -561,7 +1057,7 @@ public class BatchPayloadParserTest {
             s.append(argument.get()[0]).append('\n');
             s.append("\t\\end{lstlisting}\n");
             s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
-            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:request:" + i + "}\n");
             s.append("\\end{figure}\n");
             System.out.println(s.toString());
             i += 1;

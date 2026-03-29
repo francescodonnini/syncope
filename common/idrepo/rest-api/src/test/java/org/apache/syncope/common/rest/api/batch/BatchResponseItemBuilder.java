@@ -24,7 +24,7 @@ public class BatchResponseItemBuilder {
     }
 
     public BatchResponseItemBuilder content(String content) {
-        item.setContent(content);
+        this.content.append(content);
         return this;
     }
 
@@ -43,9 +43,7 @@ public class BatchResponseItemBuilder {
     }
 
     public BatchResponseItem create() {
-        if (!content.isEmpty()) {
-            item.setContent(content.toString());
-        }
+        item.setContent(content.toString());
         return item;
     }
 }
