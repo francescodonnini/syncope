@@ -321,7 +321,67 @@ public class BatchPayloadParserTest {
         );
     }
 
-    private static Stream<Arguments> httpRequestInputs() {
+    private static Arguments MH00 = Arguments.of(
+            BatchPayloadBuilder.builder()
+                    .boundary("mh00")
+                    .delimiter()
+                    .line()
+                    .line("DELETE /groups/3 HTTP/1.1")
+                    .closingDelimiter(),
+            List.of(BatchRequestItemBuilder.builder().method("DELETE").uri("/groups/3").create())
+    );
+
+    private static Arguments MH01 = Arguments.of(
+            BatchPayloadBuilder.builder()
+                    .boundary("mh01")
+                    .delimiter()
+                    .line()
+                    .line("content-type: application/http")
+                    .line("DELETE /groups/42 HTTP/1.1")
+                    .closingDelimiter(),
+            List.of(BatchRequestItemBuilder.builder().method("DELETE").uri("/groups/42").create())
+    );
+
+    private static Arguments MH02 = Arguments.of(
+            BatchPayloadBuilder.builder()
+                    .boundary("mh02")
+                    .delimiter()
+                    .line()
+                    .line("CONTENT-TRANSFER-ENCODING: BINARY")
+                    .line("DELETE /groups/bcdf1742-ffe6-4ee1-8e92-3033e243a62b HTTP/1.1")
+                    .closingDelimiter(),
+            List.of(BatchRequestItemBuilder.builder().method("DELETE").uri("/groups/bcdf1742-ffe6-4ee1-8e92-3033e243a62b").create())
+    );
+
+    private static Arguments MH03 = Arguments.of(
+            BatchPayloadBuilder.builder()
+                    .boundary("mh02")
+                    .delimiter()
+                    .line()
+                    .line("CONTENT-TRANSFER-ENCODING: BINARY")
+                    .line("Content-Type: APPLICATION/json")
+                    .line("PATCH /users/c40754aa-991e-41d2-b6c6-86c258ca3b1b HTTP/1.1")
+                    .line("AccepT: application/json")
+                    .line()
+                    .line("{\"firstName\": \"Mario\", \"lastName\": \"Rossi\"}")
+                    .delimiter()
+                    .line()
+                    .line("CONTENT-TRANSFER-ENCODING BINARY")
+                    .line("DELETE /groups/bcdf1742-ffe6-4ee1-8e92-3033e243a62b HTTP/1.1")
+                    .closingDelimiter(),
+            List.of(
+                    BatchRequestItemBuilder.builder()
+                                    .method("PATCH").uri("/users/c40754aa-991e-41d2-b6c6-86c258ca3b1b")
+                                    .header("Accept", "application/json")
+                                    .line("{\"firstName\": \"Mario\", \"lastName\": \"Rossi\"}")
+                                    .create(),
+                    BatchRequestItemBuilder.builder()
+                            .line("CONTENT-TRANSFER-ENCODING BINARY")
+                            .line("DELETE /groups/bcdf1742-ffe6-4ee1-8e92-3033e243a62b HTTP/1.1")
+                            .create())
+    );
+
+    private static Stream<Arguments> oldHttpRequestInputs() {
         return Stream.of(
                 Arguments.of(
                         BatchPayloadBuilder.builder().boundary("padded_boundary")
@@ -705,6 +765,12 @@ public class BatchPayloadParserTest {
         );
     }
 
+    private static Stream<Arguments> httpRequestInputs() {
+        return Stream.of(
+                MH00, MH01, MH02, MH03
+        );
+    }
+
     @ParameterizedTest
     @MethodSource("httpRequestInputs")
     public void testHttpRequests(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
@@ -843,7 +909,7 @@ public class BatchPayloadParserTest {
         return Stream.of(
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("simple-boundary-1")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -858,14 +924,13 @@ public class BatchPayloadParserTest {
                                 .status(200)
                                 .header("Content-Type", "application/json")
                                 .content("{\"status\":\"success\"}")
-                                .create())
-                ),
+                                .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("Bnd_Mixed_CaSe_99")
                                 .delimiter()
                                 .line()
-                                .line("Content-Type: application/http")
+                                .line("Content-Transfer-Encoding:\t\tbinary")
                                 .line()
                                 .line("HTTP/1.1 201 Created")
                                 .line("Location: /users/1")
@@ -876,11 +941,10 @@ public class BatchPayloadParserTest {
                                 .status(201)
                                 .header("Location", "/users/1")
                                 .content("body")
-                                .create())
-                ),
+                                .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("a very long boundary string up-to 70 characters 123456789012345678")
                                 .delimiter()
                                 .line()
                                 .line("ContentType application/http") // Missing colon
@@ -891,27 +955,23 @@ public class BatchPayloadParserTest {
                                 .closingDelimiter(),
                         List.of(BatchResponseItemBuilder.builder()
                                 .content("ContentType application/http\r\n\r\nHTTP/1.1 200 OK\r\n\r\nbody\r\n")
-                                .create())
-                ),
+                                .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("+-.2-./:=?")
                                 .delimiter()
                                 .line()
-                                .line("HTTP/1.1 200 OK")
+                                .line("HTTP/1.1 -200 OK")
                                 .line("X-Header: value")
                                 .line()
                                 .text("body")
                                 .closingDelimiter(),
                         List.of(BatchResponseItemBuilder.builder()
-                                .status(200)
-                                .header("X-Header", "value")
-                                .content("body")
-                                .create())
-                ),
+                                .content("HTTP/1.1 -200 OK\r\nX-Header: value\r\n\r\nbody")
+                                .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("200 OK")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -922,11 +982,10 @@ public class BatchPayloadParserTest {
                                 .closingDelimiter(),
                         List.of(BatchResponseItemBuilder.builder()
                                 .content("200 OK\r\n\r\n")
-                                .create())
-                ),
+                                .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("another-boundary-======")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -935,14 +994,6 @@ public class BatchPayloadParserTest {
                                 .line("HTTP/1.1 12K OK")
                                 .line()
                                 .line("body")
-                                .closingDelimiter(),
-                        List.of(BatchResponseItemBuilder.builder()
-                                .content("body\r\n")
-                                .create())
-                ),
-                Arguments.of(
-                        BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -952,13 +1003,16 @@ public class BatchPayloadParserTest {
                                 .line()
                                 .text("body")
                                 .closingDelimiter(),
-                        List.of(BatchResponseItemBuilder.builder()
-                                .content("body")
-                                .create())
-                ),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .content("HTTP/1.1 12K OK\r\n\r\nbody\r\n")
+                                        .create(),
+                                BatchResponseItemBuilder.builder()
+                                        .content("HTTP/1.1  200 OK\r\n\r\nbody")
+                                        .create())),
                 Arguments.of(
                         BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
+                                .boundary("a lot of spaces")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -966,40 +1020,18 @@ public class BatchPayloadParserTest {
                                 .line()
                                 .line("HTTP/1.1 204") // No reason-phrase
                                 .line()
-                                .closingDelimiter(),
-                        List.of(BatchResponseItemBuilder.builder()
-                                .status(204)
-                                .create())
-                ),
-                Arguments.of(
-                        BatchPayloadBuilder.builder()
-                                .boundary("res-bnd")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
                                 .line()
                                 .line("HTTP/1.1 200 OK")
-                                .line("X-Tags: tagA, tagB")
+                                .line("X-tags:       tagA,       tagB")
                                 .line("X-Tags: tagC")
                                 .line()
                                 .line("b")
                                 .line("\to")
                                 .line("\t\td")
                                 .line("\t\t\ty")
-                                .closingDelimiter(),
-                        List.of(BatchResponseItemBuilder.builder()
-                                .status(200)
-                                .header("X-Tags", "tagA")
-                                .header("X-Tags", "tagB")
-                                .header("X-Tags", "tagC")
-                                .line("b")
-                                .line("\to")
-                                .line("\t\td")
-                                .line("\t\t\ty")
-                                .create())
-                ),
-                Arguments.of(
-                        BatchPayloadBuilder.builder().boundary("res-bnd")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -1008,13 +1040,26 @@ public class BatchPayloadParserTest {
                                 .line("BadHeaderFormat")
                                 .text("body")
                                 .closingDelimiter(),
-                        List.of(BatchResponseItemBuilder.builder()
-                                .status(200)
-                                .content("BadHeaderFormat\r\nbody")
-                                .create())
-                ),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .status(204)
+                                        .create(),
+                                BatchResponseItemBuilder.builder()
+                                        .status(200)
+                                        .header("X-Tags", "tagA")
+                                        .header("X-Tags", "tagB")
+                                        .header("X-Tags", "tagC")
+                                        .line("b")
+                                        .line("\to")
+                                        .line("\t\td")
+                                        .line("\t\t\ty")
+                                        .create(),
+                                BatchResponseItemBuilder.builder()
+                                        .status(200)
+                                        .content("BadHeaderFormat\r\nbody")
+                                        .create())),
                 Arguments.of(
-                        BatchPayloadBuilder.builder().boundary("res-bnd")
+                        BatchPayloadBuilder.builder().boundary("too-many-digit-status-+-")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -1024,8 +1069,31 @@ public class BatchPayloadParserTest {
                                 .closingDelimiter(),
                         List.of(BatchResponseItemBuilder.builder()
                                 .status(123456789)
-                                .create())
-                )
+                                .create())),
+                Arguments.of(
+                        BatchPayloadBuilder.builder().boundary("duplicated-keys-boundary-!?_")
+                                .delimiter()
+                                .line()
+                                .line("Content-Type: application/http")
+                                .line()
+                                .line("HTTP/3.14 200")
+                                .delimiter()
+                                .line()
+                                .line("HTTP/1.1 404")
+                                .line("A-Key: 1")
+                                .line("a-Key: 2")
+                                .line("A-Key: 3")
+                                .closingDelimiter(),
+                        List.of(
+                                BatchResponseItemBuilder.builder()
+                                        .content("HTTP/3.14 200\r\n")
+                                        .create(),
+                                BatchResponseItemBuilder.builder()
+                                        .status(404)
+                                        .header("a-Key", "1")
+                                        .header("a-Key", "2")
+                                        .header("A-Key", "3")
+                                        .create()))
         );
     }
 
@@ -1046,24 +1114,6 @@ public class BatchPayloadParserTest {
         }
     }
 
-    @Test
-    public void printHttpInputs() {
-        int i = 19;
-        for (Arguments argument : httpRequestInputs().toList()) {
-            StringBuilder s = new StringBuilder();
-            s.append("\\begin{figure}[H]\n");
-            s.append("\t\\centering\n");
-            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
-            s.append(argument.get()[0]).append('\n');
-            s.append("\t\\end{lstlisting}\n");
-            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
-            s.append("\\label{fig:BatchPayloadParser:tests:request:" + i + "}\n");
-            s.append("\\end{figure}\n");
-            System.out.println(s.toString());
-            i += 1;
-        }
-    }
-
     private MediaType mediaType(String boundary) {
         MediaType t = mock(MediaType.class);
         when(t.getParameters()).thenReturn(Map.of("boundary", boundary));
@@ -1073,5 +1123,23 @@ public class BatchPayloadParserTest {
     private void assertEquals(BatchItem expected, BatchItem actual) {
         Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
         Assertions.assertEquals(expected.getContent(), actual.getContent());
+    }
+
+    @Test
+    public void printHttpInputs() {
+        int i = 37;
+        for (Arguments argument : httpResponseInputs().toList()) {
+            StringBuilder s = new StringBuilder();
+            s.append("\\begin{figure}[H]\n");
+            s.append("\t\\centering\n");
+            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
+            s.append(argument.get()[0]).append('\n');
+            s.append("\t\\end{lstlisting}\n");
+            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
+            s.append("\\label{fig:BatchPayloadParser:tests:response:" + i + "}\n");
+            s.append("\\end{figure}\n");
+            System.out.println(s.toString());
+            i += 1;
+        }
     }
 }
