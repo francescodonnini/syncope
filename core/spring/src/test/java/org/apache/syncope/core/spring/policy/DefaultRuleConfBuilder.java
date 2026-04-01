@@ -108,6 +108,11 @@ public class DefaultRuleConfBuilder {
         return this;
     }
 
+    public DefaultRuleConfBuilder words(List<String> words) {
+        illegalWords.addAll(words);
+        return this;
+    }
+
     public DefaultRuleConfBuilder illegalChar(char c) {
         illegalChars.add(c);
         return this;
