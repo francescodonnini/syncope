@@ -1,15 +1,24 @@
 package org.apache.syncope.core.spring.policy;
 
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
+import org.apache.syncope.core.persistence.api.entity.PlainAttr;
+import org.apache.syncope.core.persistence.api.entity.PlainSchema;
+import org.apache.syncope.core.persistence.api.entity.user.User;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.text.DateFormat;
+import java.text.DecimalFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.*;
 import java.util.stream.Stream;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class DefaultPasswordRuleTest {
     private static Stream<Arguments> alphaRuleInputs() {
@@ -391,6 +400,114 @@ public class DefaultPasswordRuleTest {
                 Arguments.of(List.of(")", ";eS", ";eS|", "det"), "det", ",yE<B+XJ>AU", Optional.empty()));
     }
 
+    private static Stream<Arguments> schemasNotPermittedRuleInput() {
+        return Stream.of(
+            Arguments.of(
+                    DefaultRuleConfBuilder.builder()
+                            .schema("surname")
+                            .build(),
+                    "mario",
+                    "rossi123",
+                    Map.of("surname", List.of("rossi")),
+                    Optional.of(PasswordPolicyException.class)),
+            Arguments.of(
+                    DefaultRuleConfBuilder.builder()
+                            .schema("name")
+                            .schema("surname")
+                            .build(),
+                    "Pablo",
+                    "#dIego",
+                    Map.of("surname", List.of("picasso", "diego", "josé", "fransisco de paula", "picasso")),
+                    Optional.of(PasswordPolicyException.class)),
+            Arguments.of(
+                    DefaultRuleConfBuilder.builder()
+                            .schema("birth")
+                            .schema("email")
+                            .build(),
+                    "admin",
+                    "a19700101b",
+                    Map.of("birth", List.of("19700101"), "email", List.of("ZiAk3H6bRx@2A8I7S.com", "281EhhtBhL@ciAZgW.com", "11WX06CT5M@dNSM5g.com")),
+                    Optional.of(PasswordPolicyException.class)),
+            Arguments.of(
+                    DefaultRuleConfBuilder.empty(),
+                    "m",
+                    "value@value@value",
+                    Map.of("key", List.of("value")),
+                    Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .schema("surname")
+                                .build(),
+                        "mario",
+                        "12ross3",
+                        Map.of("surname", List.of("rossi")),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .schema("name")
+                                .schema("surname")
+                                .build(),
+                        "Pablo",
+                        "#Iego",
+                        Map.of("surname", List.of("picasso", "diego", "josé", "fransisco de paula", "picasso")),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .schema("birth")
+                                .schema("email")
+                                .build(),
+                        "admin",
+                        "a197001iAk3H6bRx@2A8I7S.com01",
+                        Map.of("birth", List.of("19700101"), "email", List.of("ZiAk3H6bRx@2A8I7S.com", "281EhhtBhL@ciAZgW.com", "11WX06CT5M@dNSM5g.com")),
+                        Optional.empty()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("schemasNotPermittedRuleInput")
+    public void testSchemasNotPermittedRule(
+            DefaultPasswordRuleConf conf,
+            String username,
+            String password,
+            final Map<String, List<Object>> attributes,
+            Optional<Class<Exception>> exception) {
+        User user = mock(User.class);
+        when(user.getPlainAttr(anyString())).thenAnswer(i -> {
+            String schema = i.getArgument(0, String.class);
+            if (attributes.containsKey(schema)) {
+                PlainAttr attr = mock(PlainAttr.class);
+                List<String> values = attributes.get(schema).stream()
+                        .map(o -> {
+                            if (o instanceof Integer || o instanceof Long) {
+                                return DecimalFormat.getInstance().format(o);
+                            } else if (o instanceof Date) {
+                                return DateFormat.getDateInstance().format(o);
+                            } else if (o instanceof Boolean) {
+                                return o.toString();
+                            } else if (o instanceof String) {
+                                return o.toString();
+                            } else {
+                                throw new IllegalArgumentException("type not supported " + o.getClass().getCanonicalName());
+                            }
+                        }).toList();
+                when(attr.getValuesAsStrings()).thenReturn(values);
+                return Optional.of(attr);
+            } else {
+                return Optional.empty();
+            }
+        });
+        when(user.getUsername()).thenReturn(username);
+        when(user.getPassword()).thenReturn(password);
+
+        DefaultPasswordRule rule = new DefaultPasswordRule();
+        rule.setConf(conf);
+
+        if (exception.isPresent()) {
+            Assertions.assertThrows(exception.get(), () -> rule.enforce(user, password));
+        } else {
+            rule.enforce(user, password);
+        }
+    }
+
     private static List<String> split(String s) {
         return split(s, "");
     }
@@ -473,39 +590,31 @@ public class DefaultPasswordRuleTest {
 
     private static Stream<Arguments> invalidMixedRulesInput() {
         return Stream.of(
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .alpha(4)
+                                .maxLen(3)
+                                .build(),
+                        "user",
+                        "aaaa",
+                        Optional.empty()
+                )
         );
     }
 
     @ParameterizedTest
     @MethodSource("invalidMixedRulesInput")
-    public void testValidMixedRules(
-            int alpha,
-            int digit,
-            int lower,
-            int minLen,
-            int maxLen,
-            int repeat,
-            int special,
-            List<Character> specialChars,
-            int upper,
-            boolean usernameAllowed,
-            List<String> wordsNotPermitted,
+    public void testMixedRules(
+            DefaultPasswordRuleConf conf,
             String username,
-            String password) {
-        DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
-        conf.setAlphabetical(alpha);
-        conf.setDigit(digit);
-        conf.setLowercase(lower);
-        conf.setMinLength(minLen);
-        conf.setMaxLength(maxLen);
-        conf.setRepeatSame(repeat);
-        conf.setSpecial(special);
-        conf.getSpecialChars().addAll(specialChars);
-        conf.setUppercase(upper);
-        conf.setUsernameAllowed(usernameAllowed);
-        conf.getWordsNotPermitted().addAll(wordsNotPermitted);
+            String password,
+            Optional<Class<Exception>> exception) {
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
-        Assertions.assertDoesNotThrow(() -> rule.enforce(username, password));
+        if (exception.isPresent()) {
+            Assertions.assertThrows(exception.get(), () -> rule.enforce(username, password));
+        } else {
+            rule.enforce(username, password);
+        }
     }
 }
