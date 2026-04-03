@@ -93,6 +93,11 @@ public class DefaultRuleConfBuilder {
         return this;
     }
 
+    public DefaultRuleConfBuilder special(String specials) {
+        specials.chars().mapToObj(c -> (char) c).forEach(this::special);
+        return this;
+    }
+
     public DefaultRuleConfBuilder special(char special) {
         this.specialChars.add(special);
         return this;
