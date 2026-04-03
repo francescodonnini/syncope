@@ -90,9 +90,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> digitRuleInputs() {
@@ -163,9 +161,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> uppercaseRuleInputs() {
@@ -233,9 +229,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> lowercaseRuleInputs() {
@@ -295,9 +289,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> minLenRuleInputs() {
@@ -356,9 +348,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> maxLenRuleInputs() {
@@ -411,9 +401,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static final List<Character> SPECIAL = "!\"#$%&\\'()*+,-./:;<=>?@[\\\\]^_`{|}~"
@@ -454,9 +442,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> repeatSameRuleInputs() {
@@ -545,9 +531,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> usernameAllowedRuleInputs() {
@@ -633,9 +617,7 @@ public class DefaultPasswordRuleTest {
             String password,
             Optional<Class<Exception>> exception
     ) {
-        DefaultPasswordRule rule = new DefaultPasswordRule();
-        rule.setConf(conf);
-        testRule(rule, username, password, exception);
+        testRule(conf, username, password, exception);
     }
 
     private static Stream<Arguments> wordsNotPermittedRuleInputs() {
@@ -849,6 +831,46 @@ public class DefaultPasswordRuleTest {
         return Stream.of(
                 Arguments.of(
                         DefaultRuleConfBuilder.builder()
+                                .minLen(8).maxLen(9)
+                                .alpha(3).lower(2).upper(2)
+                                .digit(1)
+                                .specials(1).special(SPECIAL)
+                                .build(),
+                        "Mario", "NeRi1#",
+                        Map.of(),
+                        Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(4).maxLen(5)
+                                .alpha(2)
+                                .digit(2)
+                                .specials(1).special(SPECIAL)
+                                .build(),
+                        "ADMIN", "5o?a1",
+                        Map.of(),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(4).maxLen(5)
+                                .alpha(2).lower(1).upper(1)
+                                .digit(2)
+                                .specials(1).special(SPECIAL)
+                                .build(),
+                        null, "o3k.1",
+                        Map.of(),
+                        Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(3).maxLen(4)
+                                .alpha(4).upper(2)
+                                .digit(1)
+                                .specials(1).special(SPECIAL)
+                                .build(),
+                        null, "JUn3#",
+                        Map.of(),
+                        Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
                                 .minLen(12)
                                 .maxLen(11)
                                 .build(),
@@ -867,14 +889,41 @@ public class DefaultPasswordRuleTest {
                         Optional.of(PasswordPolicyException.class)),
                 Arguments.of(
                         DefaultRuleConfBuilder.builder()
+                                .minLen(8)
                                 .alpha(4)
                                 .upper(1)
-                                .special("!\"£$%&/()=?^{}[]@#°")
+                                .special(SPECIAL)
                                 .specials(1)
                                 .repeatSame(3)
-                                .minLen(8)
                                 .build(),
                         "jon", "ddo#E11a",
+                        Map.of(),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .special(List.of('£'))
+                                .specials(4)
+                                .repeatSame(3)
+                                .build(),
+                        "", "££££",
+                        Map.of(),
+                        Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .alpha(3).upper(1)
+                                .specials(2)
+                                .special(List.of('a', 'b', 'c', 'd', 'e'))
+                                .build(),
+                        "Jon", "dOe",
+                        Map.of(),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .digit(2)
+                                .specials(3)
+                                .special(List.of('1', '2', '3', '4', '5'))
+                                .build(),
+                        "86&53a", "Jord4n23",
                         Map.of(),
                         Optional.empty())
         );
@@ -888,6 +937,13 @@ public class DefaultPasswordRuleTest {
             final Map<String, List<Object>> attributes,
             Optional<Class<Exception>> exception) {
         testRule(conf, username, password, attributes, exception);
+    }
+
+    private void testRule(
+            DefaultPasswordRuleConf conf,
+            String username, String password,
+            Optional<Class<Exception>> exception) {
+        testRule(conf, username, password, Map.of(), exception);
     }
 
     private void testRule(
@@ -930,17 +986,6 @@ public class DefaultPasswordRuleTest {
             Assertions.assertThrows(exception.get(), () -> rule.enforce(user, password));
         } else {
             rule.enforce(user, password);
-        }
-    }
-
-    private void testRule(
-            DefaultPasswordRule rule,
-            String username, String password,
-            Optional<Class<Exception>> exception) {
-        if (exception.isPresent()) {
-            Assertions.assertThrows(exception.get(), () -> rule.enforce(username, password));
-        } else {
-            rule.enforce(username, password);
         }
     }
 }
