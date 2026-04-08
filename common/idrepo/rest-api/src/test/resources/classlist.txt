@@ -1,2 +1,0 @@
-org.apache.syncope.common.rest.api.batch.BatchPayloadParser
-
