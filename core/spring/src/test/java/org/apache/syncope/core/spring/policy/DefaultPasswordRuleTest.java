@@ -1,6 +1,7 @@
 package org.apache.syncope.core.spring.policy;
 
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
+import org.apache.syncope.common.lib.policy.PasswordRuleConf;
 import org.apache.syncope.core.persistence.api.entity.PlainAttr;
 import org.apache.syncope.core.persistence.api.entity.user.User;
 import org.junit.jupiter.api.Assertions;
@@ -925,8 +926,47 @@ public class DefaultPasswordRuleTest {
                                 .build(),
                         "86&53a", "Jord4n23",
                         Map.of(),
-                        Optional.empty())
-        );
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(20)
+                                .digit(5)
+                                .alpha(5)
+                                .specials(5)
+                                .build(),
+                        "admin", null,
+                        Map.of(),
+                        Optional.empty()),
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(8).maxLen(20)
+                                .alpha(4).lower(2).upper(2)
+                                .digit(2)
+                                .specials(2).special(SPECIAL)
+                                .schema("surname")
+                                .build(),
+                        "mrossi", "aB1!Rossi2@",
+                        Map.of("surname", List.of("Rossi")),
+                        Optional.of(PasswordPolicyException.class)),
+
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(15)
+                                .schema("surname")
+                                .build(),
+                        "mrossi", "Rossi123!",
+                        Map.of("surname", List.of("Rossi")),
+                        Optional.of(PasswordPolicyException.class)),
+
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                                .minLen(8)
+                                .repeatSame(3)
+                                .schema("department")
+                                .build(),
+                        "user", "123Boooook99",
+                        Map.of("department", List.of("Boooook")),
+                        Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -981,11 +1021,15 @@ public class DefaultPasswordRuleTest {
 
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
-
+        assertEquals(conf, rule.getConf());
         if (exception.isPresent()) {
             Assertions.assertThrows(exception.get(), () -> rule.enforce(user, password));
         } else {
             rule.enforce(user, password);
         }
+    }
+
+    private void assertEquals(PasswordRuleConf c1, PasswordRuleConf c2) {
+        Assertions.assertEquals(c1, c2);
     }
 }
