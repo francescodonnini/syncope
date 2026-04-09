@@ -95,6 +95,7 @@ under the License.
     </plugins>
   </build>
   <profiles>
+    <!-- JaCoCo -->
     <profile>
       <id>jacoco</id>
       <build>
@@ -137,6 +138,7 @@ under the License.
       </build>
     </profile>
 
+    <!-- PIT -->
     <profile>
       <id>pit</id>
       <build>
@@ -157,7 +159,12 @@ under the License.
               </targetClasses>
               <targetTests>
                 <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserTest</targetTest>
+                <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserGeminiTest</targetTest>
+                <targetTest>RegressionTest*</targetTest>
               </targetTests>
+              <excludedTestClasses>
+                <param>ErrorTest*</param>
+              </excludedTestClasses>
             </configuration>
           </plugin>
           <plugin>
