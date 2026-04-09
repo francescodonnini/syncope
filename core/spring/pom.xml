@@ -138,7 +138,6 @@ under the License.
       <scope>test</scope>
     </dependency>
   </dependencies>
-
   <build>
     <plugins>
       <plugin>
@@ -164,6 +163,7 @@ under the License.
     </resources>
   </build>
 
+  <!-- JaCoCo -->
   <profiles>
     <profile>
       <id>jacoco</id>
@@ -201,12 +201,16 @@ under the License.
             <artifactId>maven-surefire-plugin</artifactId>
             <configuration>
               <argLine>@{argLine}</argLine>
+              <excludes>
+                <exclude>**/ErrorTest*</exclude>
+              </excludes>
             </configuration>
           </plugin>
         </plugins>
       </build>
     </profile>
 
+    <!-- PIT -->
     <profile>
       <id>pit</id>
       <build>
@@ -227,7 +231,12 @@ under the License.
               </targetClasses>
               <targetTests>
                 <targetTest>org.apache.syncope.core.spring.policy.DefaultPasswordRuleTest</targetTest>
+                <targetTest>org.apache.syncope.core.spring.policy.DefaultPasswordRuleGeminiTest</targetTest>
+                <targetTest>RegressionTest*</targetTest>
               </targetTests>
+              <excludedTestClasses>
+                <param>ErrorTest*</param>
+              </excludedTestClasses>
             </configuration>
           </plugin>
           <plugin>
