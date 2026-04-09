@@ -1,2 +1,0 @@
-org.apache.syncope.core.spring.policy.DefaultPasswordRule.enforce(java.lang.String,java.lang.String)
-org.apache.syncope.core.spring.policy.DefaultPasswordRuleRandoopHelper.createPasswordRule(int,int,int,int,int,int,java.util.Set,int,boolean,int)

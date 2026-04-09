@@ -264,6 +264,9 @@ under the License.
                     <argument>randoop.main.Main</argument>
                     <argument>gentests</argument>
                     <argument>--testclass=org.apache.syncope.common.rest.api.batch.BatchPayloadParser</argument>
+                    <argument>--testclass=java.io.ByteArrayInputStream</argument>
+                    <argument>--testclass=jakarta.ws.rs.core.MediaType</argument>
+                    <argument>--testclass=org.apache.syncope.common.rest.api.batch.BatchRequestItem</argument>
                     <argument>--junit-output-dir=${project.build.directory}/generated-test-sources/randoop</argument>
                     <argument>--time-limit=15</argument>
                   </arguments>

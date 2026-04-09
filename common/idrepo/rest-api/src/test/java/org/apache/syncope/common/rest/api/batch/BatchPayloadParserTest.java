@@ -2,7 +2,6 @@ package org.apache.syncope.common.rest.api.batch;
 
 import jakarta.ws.rs.core.MediaType;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -252,24 +251,6 @@ public class BatchPayloadParserTest {
         );
     }
 
-    @Test
-    public void printInputs() {
-        int i = 1;
-        for (Arguments argument : inputs().toList()) {
-            StringBuilder s = new StringBuilder();
-            s.append("\\begin{figure}[H]\n");
-            s.append("\t\\centering\n");
-            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
-            s.append(argument.get()[0]).append('\n');
-            s.append("\t\\end{lstlisting}\n");
-            s.append("\t\\caption{Payload del caso di test TC" + i + "}\n");
-            s.append("\\label{fig:BatchPayloadParser:tests:" + i + "}\n");
-            s.append("\\end{figure}\n");
-            System.out.println(s.toString());
-            i += 1;
-        }
-    }
-
     @ParameterizedTest
     @MethodSource("inputs")
     public void test(BatchPayloadBuilder builder, Optional<Integer> expectedNumOfParts, Optional<Class<Exception>> expectedException) throws IOException {
@@ -311,6 +292,13 @@ public class BatchPayloadParserTest {
                 NullPointerException.class,
                 () -> BatchPayloadParser.parse(new ByteArrayInputStream(PART_07.create()), null, new BatchRequestItem())
         );
+    }
+
+    @Test
+    public void testInvalidMediaType() {
+        Assertions.assertThrows(
+                NullPointerException.class,
+                () -> BatchPayloadParser.parse(new ByteArrayInputStream(PART_07.create()), MediaType.TEXT_PLAIN_TYPE, new BatchRequestItem()));
     }
 
     @Test
@@ -968,23 +956,5 @@ public class BatchPayloadParserTest {
     private void assertEquals(BatchItem expected, BatchItem actual) {
         Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
         Assertions.assertEquals(expected.getContent(), actual.getContent());
-    }
-
-    @Test
-    public void printHttpInputs() {
-        int i = 37;
-        for (Arguments argument : httpResponseInputs().toList()) {
-            StringBuilder s = new StringBuilder();
-            s.append("\\begin{figure}[H]\n");
-            s.append("\t\\centering\n");
-            s.append("\t\\begin{lstlisting}[style=EBNF]\n");
-            s.append(argument.get()[0]).append('\n');
-            s.append("\t\\end{lstlisting}\n");
-            s.append("\t\\caption{Payload del caso di test TC" + i + ".}\n");
-            s.append("\\label{fig:BatchPayloadParser:tests:response:" + i + "}\n");
-            s.append("\\end{figure}\n");
-            System.out.println(s.toString());
-            i += 1;
-        }
     }
 }
