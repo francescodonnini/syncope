@@ -182,7 +182,6 @@ under the License.
                   <destFile>${project.build.directory}/jacoco.exec</destFile>
                 </configuration>
               </execution>
-              <!-- attached to Maven test phase -->
               <execution>
                 <id>report</id>
                 <phase>test</phase>
