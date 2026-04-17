@@ -25,4 +25,24 @@ jobs:
         run: >
           mvn test jacoco:report org.pitest:pitest-maven:mutationCoverage 
           -Pjacoco,pit,randoop 
-          -pl bookkeeper-server
+          -pl syncope-core-spring,syncope-common-idrepo-rest-api
+
+      - name: Upload JaCoCo and PIT reports
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: test-reports
+          path: |
+            common/idrepo/rest-api/target/site/jacoco
+            common/idrepo/rest-api/target/pit-reports
+            core/spring/target/site/jacoco
+            core/spring/target/pit-reports
+
+      - name: Upload Auto-generated Tests
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: auto-generated-tests
+          path: |
+            common/idrepo/rest-api/target/target/generated-test-sources/randoop
+            core/spring/target/generated-test-sources/randoop
