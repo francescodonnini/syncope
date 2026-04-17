@@ -25,7 +25,7 @@ jobs:
         run: >
           mvn test jacoco:report org.pitest:pitest-maven:mutationCoverage 
           -Pjacoco,pit,randoop 
-          -pl syncope-core-spring,syncope-common-idrepo-rest-api
+          -pl :syncope-core-spring,:syncope-common-idrepo-rest-api
 
       - name: Upload JaCoCo and PIT reports
         uses: actions/upload-artifact@v4
@@ -44,5 +44,5 @@ jobs:
         with:
           name: auto-generated-tests
           path: |
-            common/idrepo/rest-api/target/target/generated-test-sources/randoop
+            common/idrepo/rest-api/target/generated-test-sources/randoop
             core/spring/target/generated-test-sources/randoop
