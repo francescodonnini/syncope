@@ -21,11 +21,8 @@ jobs:
       - name: Build with Maven
         run: mvn -PskipTests,syncope-core-spring,syncope-common-idrepo-rest-api -am
 
-      - name: JaCoCo
-        run: mvn test -Pjacoco -pl syncope-core-spring,syncope-common-idrepo-rest-api
-
-      - name: PIT
-        run: mvn org.pitest:pitest-maven:mutationCoverage -Ppit -pl syncope-core-spring,syncope-common-idrepo-rest-api
-
-      - name: Randoop
-        run: mvn test -Prandoop -pl syncope-core-spring,syncope-common-idrepo-rest-api
+      - name: Generate, Test, Coverage, and Mutate
+        run: >
+          mvn test jacoco:report org.pitest:pitest-maven:mutationCoverage 
+          -Pjacoco,pit,randoop 
+          -pl bookkeeper-server
