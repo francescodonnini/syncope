@@ -18,6 +18,18 @@
  */
 package org.apache.syncope.core.spring.policy;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.text.DateFormat;
+import java.text.DecimalFormat;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
 import org.apache.syncope.common.lib.policy.PasswordRuleConf;
 import org.apache.syncope.core.persistence.api.entity.PlainAttr;
@@ -27,17 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.text.DateFormat;
-import java.text.DecimalFormat;
-import java.util.*;
-import java.util.stream.Stream;
-
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 public class DefaultPasswordRuleTest {
-
     private static Stream<Arguments> alphaRuleInputs() {
         return Stream.of(
                 Arguments.of(
@@ -104,10 +106,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("alphaRuleInputs")
     public void testAlphaRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -177,10 +179,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("digitRuleInputs")
     public void testDigitRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -245,10 +247,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("uppercaseRuleInputs")
     public void testUppercaseRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -305,10 +307,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("lowercaseRuleInputs")
     public void testLowercaseRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -368,10 +370,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("minLenRuleInputs")
     public void testMinLenRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -421,10 +423,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("maxLenRuleInputs")
     public void testMaxLenRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -486,10 +488,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("specialRuleInput")
     public void testSpecialRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -580,10 +582,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("repeatSameRuleInputs")
     public void testRepeatSameRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -666,10 +668,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("usernameAllowedRuleInputs")
     public void testUsernameAllowedRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, exception);
     }
@@ -789,21 +791,21 @@ public class DefaultPasswordRuleTest {
                         Optional.empty()));
     }
 
-    private static List<String> split(String s) {
+    private static List<String> split(final String s) {
         return split(s, "");
     }
 
-    private static List<String> split(String s, String delimiter) {
+    private static List<String> split(final String s, final String delimiter) {
         return Arrays.stream(s.split(delimiter)).toList();
     }
 
     @ParameterizedTest
     @MethodSource("wordsNotPermittedRuleInputs")
     public void testWordsNotPermittedRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
-            Optional<Class<Exception>> exception
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception
     ) {
         testRule(conf, username, password, Map.of(), exception);
     }
@@ -881,11 +883,11 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("schemasNotPermittedRuleInput")
     public void testSchemasNotPermittedRule(
-            DefaultPasswordRuleConf conf,
-            String username,
-            String password,
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
             final Map<String, List<Object>> attributes,
-            Optional<Class<Exception>> exception) {
+            final Optional<Class<Exception>> exception) {
         testRule(conf, username, password, attributes, exception);
     }
 
@@ -1033,10 +1035,10 @@ public class DefaultPasswordRuleTest {
     @ParameterizedTest
     @MethodSource("mixedRulesInput")
     public void testMixedRules(
-            DefaultPasswordRuleConf conf,
-            String username, String password,
+            final DefaultPasswordRuleConf conf,
+            final String username, String password,
             final Map<String, List<Object>> attributes,
-            Optional<Class<Exception>> exception) {
+            final Optional<Class<Exception>> exception) {
         testRule(conf, username, password, attributes, exception);
     }
 
@@ -1048,10 +1050,10 @@ public class DefaultPasswordRuleTest {
     }
 
     private void testRule(
-            DefaultPasswordRuleConf conf,
-            String username, String password,
+            final DefaultPasswordRuleConf conf,
+            final String username, String password,
             final Map<String, List<Object>> attributes,
-            Optional<Class<Exception>> exception) {
+            final Optional<Class<Exception>> exception) {
         User user = mock(User.class);
         when(user.getPlainAttr(anyString())).thenAnswer(i -> {
             String schema = i.getArgument(0, String.class);
@@ -1091,7 +1093,7 @@ public class DefaultPasswordRuleTest {
         }
     }
 
-    private void assertEquals(PasswordRuleConf c1, PasswordRuleConf c2) {
+    private void assertEquals(final PasswordRuleConf c1, final PasswordRuleConf c2) {
         Assertions.assertEquals(c1, c2);
     }
 }

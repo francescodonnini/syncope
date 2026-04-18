@@ -18,7 +18,10 @@
  */
 package org.apache.syncope.core.spring.policy;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -57,20 +60,20 @@ public class DefaultPasswordRuleGeminiTest {
     }
 
     @Test
-    public void testEnforce_NullPassword() {
+    public void testEnforceNullPassword() {
         // Enforce should ignore null passwords without throwing exceptions
         assertDoesNotThrow(() -> rule.enforce(user, null));
     }
 
     @Test
-    public void testEnforce_ValidPassword() {
+    public void testEnforceValidPassword() {
         when(user.getUsername()).thenReturn("johndoe");
 
         assertDoesNotThrow(() -> rule.enforce(user, "Valid1Password"));
     }
 
     @Test
-    public void testEnforce_InvalidPassword_Length() {
+    public void testEnforceInvalidPasswordLength() {
         when(user.getUsername()).thenReturn("johndoe");
 
         // Expect an exception due to policy violation (Length is 5, minimum is 8)
@@ -78,12 +81,13 @@ public class DefaultPasswordRuleGeminiTest {
             rule.enforce(user, "Sh1rt");
         });
 
-        // Verify an exception message is generated without depending on exact passay.properties phrasing
+        // Verify an exception message is generated without depending on exact
+        // passay.properties phrasing
         assertNotNull(exception.getMessage());
     }
 
     @Test
-    public void testEnforce_InvalidPassword_UsernameNotAllowed() {
+    public void testEnforceInvalidPasswordUsernameNotAllowed() {
         when(user.getUsername()).thenReturn("johndoe");
 
         // Expect an exception due to policy violation (username contained in password)
@@ -95,7 +99,7 @@ public class DefaultPasswordRuleGeminiTest {
     }
 
     @Test
-    public void testEnforce_InvalidPassword_WordsNotPermitted() {
+    public void testEnforceInvalidPasswordWordsNotPermitted() {
         conf.getWordsNotPermitted().add("syncope");
         rule.setConf(conf); // Re-initialize passay validator
 
@@ -110,7 +114,7 @@ public class DefaultPasswordRuleGeminiTest {
     }
 
     @Test
-    public void testEnforce_InvalidPassword_SchemasNotPermitted() {
+    public void testEnforceInvalidPasswordSchemasNotPermitted() {
         conf.getSchemasNotPermitted().add("surname");
         rule.setConf(conf); // Re-initialize passay validator
 
@@ -129,7 +133,7 @@ public class DefaultPasswordRuleGeminiTest {
     }
 
     @Test
-    public void testEnforce_ValidPassword_WithEmptyPlainAttr() {
+    public void testEnforceValidPasswordWithEmptyPlainAttr() {
         conf.getSchemasNotPermitted().add("surname");
         rule.setConf(conf);
 

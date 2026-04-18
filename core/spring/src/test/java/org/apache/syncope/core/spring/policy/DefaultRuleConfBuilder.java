@@ -19,8 +19,9 @@
 package org.apache.syncope.core.spring.policy;
 
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
-
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class DefaultRuleConfBuilder {
     private int alpha = 0;
@@ -66,78 +67,68 @@ public class DefaultRuleConfBuilder {
         return conf;
     }
 
-    public DefaultRuleConfBuilder schema(String schema) {
+    public DefaultRuleConfBuilder schema(final String schema) {
         schemas.add(schema);
         return this;
     }
 
-    public DefaultRuleConfBuilder repeatSame(int repeatSame) {
+    public DefaultRuleConfBuilder repeatSame(final int repeatSame) {
         this.repeatSame = repeatSame;
         return this;
     }
 
-    public DefaultRuleConfBuilder alpha(int alpha) {
+    public DefaultRuleConfBuilder alpha(final int alpha) {
         this.alpha = alpha;
         return this;
     }
 
-    public DefaultRuleConfBuilder digit(int digit) {
+    public DefaultRuleConfBuilder digit(final int digit) {
         this.digit = digit;
         return this;
     }
 
-    public DefaultRuleConfBuilder lower(int lower) {
+    public DefaultRuleConfBuilder lower(final int lower) {
         this.lower = lower;
         return this;
     }
 
-    public DefaultRuleConfBuilder upper(int upper) {
+    public DefaultRuleConfBuilder upper(final int upper) {
         this.upper = upper;
         return this;
     }
 
-    public DefaultRuleConfBuilder minLen(int minLen) {
+    public DefaultRuleConfBuilder minLen(final int minLen) {
         this.minLen = minLen;
         return this;
     }
 
-    public DefaultRuleConfBuilder maxLen(int maxLen) {
+    public DefaultRuleConfBuilder maxLen(final int maxLen) {
         this.maxLen = maxLen;
         return this;
     }
 
-    public DefaultRuleConfBuilder specials(int specials) {
+    public DefaultRuleConfBuilder specials(final int specials) {
         this.specials = specials;
         return this;
     }
 
-    public DefaultRuleConfBuilder special(List<Character> specials) {
+    public DefaultRuleConfBuilder special(final List<Character> specials) {
         this.specialChars.addAll(specials);
         return this;
     }
 
-    public DefaultRuleConfBuilder special(char special) {
+    public DefaultRuleConfBuilder special(final char special) {
         this.specialChars.add(special);
         return this;
     }
 
-    public DefaultRuleConfBuilder usernameAllowed(boolean usernameAllowed) {
+    public DefaultRuleConfBuilder usernameAllowed(final boolean usernameAllowed) {
         this.usernameAllowed = usernameAllowed;
         return this;
     }
 
-    public DefaultRuleConfBuilder word(String word) {
-        illegalWords.add(word);
-        return this;
-    }
-
-    public DefaultRuleConfBuilder words(List<String> words) {
+    public DefaultRuleConfBuilder words(final List<String> words) {
         illegalWords.addAll(words);
-        return this;
-    }
-
-    public DefaultRuleConfBuilder illegalChar(char c) {
-        illegalChars.add(c);
         return this;
     }
 }
