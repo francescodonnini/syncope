@@ -7,43 +7,29 @@ import java.util.List;
 import java.util.Random;
 
 public class BatchPayloadBuilder {
-    private static final String[] MIME_TYPES = {
-            "text/plain", "text/html", "application/json", "application/xml",
-            "image/jpeg", "image/png", "audio/mpeg", "video/mp4",
-            "application/octet-stream", "multipart/mixed"
-    };
-
-    private static final String[] ENCODINGS = {
-            "7bit", "8bit", "binary", "quoted-printable", "base64", "x-custom-encoding"
-    };
-
-    private static final String[] DISPOSITIONS = {
-            "inline", "attachment", "form-data"
-    };
     private static final String EOL = "\n";
     private static final String CRLF = "\r\n";
     private static final String ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String DIGITS = "0123456789";
-    private static final String ALNUM = ALPHA + DIGITS;
     private static final String SPECIALS = "'()+_,-./:=?";
     private static final String BCHARSNOSPACE = ALPHA + DIGITS + SPECIALS;
     private static final String BCHARS = BCHARSNOSPACE + " ";
     private String boundary;
-    private StringBuilder buffer = new StringBuilder();
-    private StringBuilder partBuffer = new StringBuilder();
+    private final StringBuilder buffer = new StringBuilder();
+    private final StringBuilder partBuffer = new StringBuilder();
     private StringBuilder current;
-    private List<String> parts = new ArrayList<>();
-    private Random random;
+    private final List<String> parts = new ArrayList<>();
+    private final Random random;
 
     public static BatchPayloadBuilder builder() {
         return builder(123456789L);
     }
 
-    public static BatchPayloadBuilder builder(long seed) {
+    public static BatchPayloadBuilder builder(final long seed) {
         return new BatchPayloadBuilder(seed);
     }
 
-    private BatchPayloadBuilder(long seed) {
+    private BatchPayloadBuilder(final long seed) {
         this.random = new Random(seed);
         current = buffer;
     }
@@ -52,7 +38,7 @@ public class BatchPayloadBuilder {
         return create(StandardCharsets.US_ASCII);
     }
 
-    public byte[] create(Charset charset) {
+    public byte[] create(final Charset charset) {
         return buffer.toString().getBytes(charset);
     }
 
@@ -64,7 +50,7 @@ public class BatchPayloadBuilder {
         return parts;
     }
 
-    public BatchPayloadBuilder boundary(String boundary) {
+    public BatchPayloadBuilder boundary(final String boundary) {
         this.boundary = boundary;
         return this;
     }
@@ -83,7 +69,7 @@ public class BatchPayloadBuilder {
             throw new IllegalStateException();
         }
         parts.add(partBuffer.toString());
-        buffer.append(partBuffer.toString());
+        buffer.append(partBuffer);
         current = buffer;
         return this;
     }
@@ -96,15 +82,15 @@ public class BatchPayloadBuilder {
         return line(false);
     }
 
-    public BatchPayloadBuilder line(boolean unixEol) {
+    public BatchPayloadBuilder line(final boolean unixEol) {
         return line("", unixEol);
     }
 
-    public BatchPayloadBuilder line(String line) {
+    public BatchPayloadBuilder line(final String line) {
         return line(line, false);
     }
 
-    public BatchPayloadBuilder line(String line, boolean unixEol) {
+    public BatchPayloadBuilder line(final String line, final boolean unixEol) {
         current.append(line);
         if (unixEol) {
             current.append("\n");
@@ -114,12 +100,12 @@ public class BatchPayloadBuilder {
         return this;
     }
 
-    public BatchPayloadBuilder text(String text) {
+    public BatchPayloadBuilder text(final String text) {
         current.append(text);
         return this;
     }
 
-    public BatchPayloadBuilder text(int maxLength, int maxNumOfLines) {
+    public BatchPayloadBuilder text(final int maxLength, final int maxNumOfLines) {
         for (int i = 0; i < random.nextInt(maxNumOfLines); i++) {
             choice(current, BCHARS, random.nextInt(maxLength));
             current.append(EOL);
@@ -127,31 +113,7 @@ public class BatchPayloadBuilder {
         return this;
     }
 
-    public BatchPayloadBuilder preamble(int maxLength, int maxNumOfLines) {
-        int lines = random.nextInt(maxNumOfLines);
-        if (lines > 0) {
-            for (int i = 0; i < lines; i++) {
-                choice(current, BCHARS, random.nextInt(maxLength));
-                crlf(current, true);
-            }
-            crlf(current);
-        }
-        return this;
-    }
-
-    public BatchPayloadBuilder epilogue(int maxLength, int maxNumOfLines) {
-        int lines = random.nextInt(maxNumOfLines);
-        if (lines > 0) {
-            crlf(current);
-            for (int i = 0; i < lines; i++) {
-                choice(current, BCHARS, random.nextInt(maxLength));
-                crlf(current, true);
-            }
-        }
-        return this;
-    }
-
-    public BatchPayloadBuilder delimiter(int padding) {
+    public BatchPayloadBuilder delimiter(final int padding) {
         crlf(current);
         dashBoundary(current);
         transportPadding(current, padding);
@@ -162,7 +124,7 @@ public class BatchPayloadBuilder {
         return closingDelimiter(0);
     }
 
-    public BatchPayloadBuilder closingDelimiter(int padding) {
+    public BatchPayloadBuilder closingDelimiter(final int padding) {
         crlf(current);
         dashBoundary(current);
         current.append("--");
@@ -174,35 +136,35 @@ public class BatchPayloadBuilder {
         return current.toString();
     }
 
-    private void boundary(StringBuilder s) {
+    private void boundary(final StringBuilder s) {
         s.append(this.boundary);
     }
 
-    private void dashBoundary(StringBuilder s) {
+    private void dashBoundary(final StringBuilder s) {
         s.append("--");
         boundary(s);
     }
 
-    private void transportPadding(StringBuilder s, int n) {
+    private void transportPadding(final StringBuilder s, final int n) {
         String lws = " \t";
         choice(s, lws, n);
     }
 
-    private void choice(StringBuilder s, String alphabet, int times) {
+    private void choice(final StringBuilder s, final String alphabet, final int times) {
         for (int i = 0; i < times; i++) {
             s.append(choice(alphabet));
         }
     }
 
-    private String choice(String alphabet) {
+    private String choice(final String alphabet) {
         return String.valueOf(alphabet.charAt(random.nextInt(alphabet.length())));
     }
 
-    private void crlf(StringBuilder s) {
+    private void crlf(final StringBuilder s) {
         crlf(s, false);
     }
 
-    private void crlf(StringBuilder s, boolean unixEol) {
+    private void crlf(final StringBuilder s, final boolean unixEol) {
         if (unixEol) {
             s.append(EOL);
         } else {

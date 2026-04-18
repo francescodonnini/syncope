@@ -251,7 +251,7 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("inputs")
-    public void test(BatchPayloadBuilder builder, Optional<Integer> expectedNumOfParts, Optional<Class<Exception>> expectedException) throws IOException {
+    public void test(final BatchPayloadBuilder builder, final Optional<Integer> expectedNumOfParts, final Optional<Class<Exception>> expectedException) throws IOException {
         if (expectedNumOfParts.isEmpty() && expectedException.isEmpty()) {
             throw new IllegalArgumentException("no expected value");
         }
@@ -715,7 +715,7 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("httpRequestInputs")
-    public void testHttpRequests(BatchPayloadBuilder builder, List<BatchRequestItem> expectedBatch) throws IOException {
+    public void testHttpRequests(final BatchPayloadBuilder builder, final List<BatchRequestItem> expectedBatch) throws IOException {
         List<BatchRequestItem> actualBatch = BatchPayloadParser.parse(
                 new ByteArrayInputStream(builder.create()),
                 mediaType(builder.getBoundary()),
@@ -930,7 +930,7 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("httpResponseInputs")
-    public void testHttpResponses(BatchPayloadBuilder builder, List<BatchResponseItem> expectedBatch) throws IOException {
+    public void testHttpResponses(final BatchPayloadBuilder builder, final List<BatchResponseItem> expectedBatch) throws IOException {
         List<BatchResponseItem> actualBatch = BatchPayloadParser.parse(
                 new ByteArrayInputStream(builder.create()),
                 mediaType(builder.getBoundary()),
@@ -945,13 +945,13 @@ public class BatchPayloadParserTest {
         }
     }
 
-    private MediaType mediaType(String boundary) {
+    private MediaType mediaType(final String boundary) {
         MediaType t = mock(MediaType.class);
         when(t.getParameters()).thenReturn(Map.of("boundary", boundary));
         return t;
     }
 
-    private void assertEquals(BatchItem expected, BatchItem actual) {
+    private void assertEquals(final BatchItem expected, final BatchItem actual) {
         Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
         Assertions.assertEquals(expected.getContent(), actual.getContent());
     }
