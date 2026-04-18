@@ -1,5 +1,7 @@
 package org.apache.syncope.common.rest.api.batch;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import jakarta.ws.rs.core.MediaType;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -13,9 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class BatchPayloadParserTest {
     private static final BatchPayloadBuilder PART_00 = BatchPayloadBuilder.builder()
@@ -140,7 +139,7 @@ public class BatchPayloadParserTest {
             .closingDelimiter();
 
     // The closing boundary does not match with the expected one
-    // (they differ by the last letter), expecting IllegalArgumentException
+    // (they differ by the last letter) expecting IllegalArgumentException
     private static final BatchPayloadBuilder BOUND_03 = BatchPayloadBuilder.builder()
             .boundary("boundary")
             .delimiter()
@@ -273,7 +272,12 @@ public class BatchPayloadParserTest {
                 Assertions.assertEquals(expectedParts.get(i), actualParts.get(i).getContent());
             }
         } else {
-            Assertions.assertThrows(expectedException.get(), () -> BatchPayloadParser.parse(new ByteArrayInputStream(builder.create()), mediaType, new BatchRequestItem()));
+            Assertions.assertThrows(
+                    expectedException.get(),
+                    () -> BatchPayloadParser.parse(
+                            new ByteArrayInputStream(builder.create()),
+                            mediaType,
+                            new BatchRequestItem()));
         }
     }
 
@@ -281,8 +285,10 @@ public class BatchPayloadParserTest {
     public void testEmptyStream() {
         Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> BatchPayloadParser.parse(InputStream.nullInputStream(), mediaType("bb"), new BatchRequestItem())
-        );
+                () -> BatchPayloadParser.parse(
+                        InputStream.nullInputStream(),
+                        mediaType("bb"),
+                        new BatchRequestItem()));
     }
 
     @Test
@@ -297,23 +303,30 @@ public class BatchPayloadParserTest {
     public void testNullMediaType() {
         Assertions.assertThrows(
                 NullPointerException.class,
-                () -> BatchPayloadParser.parse(new ByteArrayInputStream(PART_07.create()), null, new BatchRequestItem())
-        );
+                () -> BatchPayloadParser.parse(
+                        new ByteArrayInputStream(PART_07.create()),
+                        null,
+                        new BatchRequestItem()));
     }
 
     @Test
     public void testInvalidMediaType() {
         Assertions.assertThrows(
                 NullPointerException.class,
-                () -> BatchPayloadParser.parse(new ByteArrayInputStream(PART_07.create()), MediaType.TEXT_PLAIN_TYPE, new BatchRequestItem()));
+                () -> BatchPayloadParser.parse(
+                        new ByteArrayInputStream(PART_07.create()),
+                        MediaType.TEXT_PLAIN_TYPE,
+                        new BatchRequestItem()));
     }
 
     @Test
     public void testNullTemplate() {
         Assertions.assertThrows(
                 NullPointerException.class,
-                () -> BatchPayloadParser.parse(new ByteArrayInputStream(PART_07.create()), mediaType(PART_07.getBoundary()), null)
-        );
+                () -> BatchPayloadParser.parse(
+                        new ByteArrayInputStream(PART_07.create()),
+                        mediaType(PART_07.getBoundary()),
+                        null));
     }
 
     private static Stream<Arguments> httpRequestInputs() {
@@ -400,7 +413,8 @@ public class BatchPayloadParserTest {
                 ),
                 // Missing request-line
                 Arguments.of(
-                        BatchPayloadBuilder.builder().boundary("a-very-long-boundary-string-that-will-tests-the-limits-1234567890")
+                        BatchPayloadBuilder.builder()
+                                .boundary("a-very-long-boundary-string-that-will-tests-the-limits-1234567890")
                                 .delimiter()
                                 .line()
                                 .line("Content-Type: application/http")
@@ -473,7 +487,8 @@ public class BatchPayloadParserTest {
                                 .line()
                                 .line("POST /users HTTP/1.1")
                                 .line("X-Domain: Master, Other") // Comma-separated values
-                                .line("X-Domain: Third") // Duplicated key, its value should be appended to the ones above
+                                // Duplicated key, its value should be appended to the ones above
+                                .line("X-Domain: Third")
                                 .line()
                                 .text("body")
                                 .delimiter()
@@ -724,7 +739,9 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("httpRequestInputs")
-    public void testHttpRequests(final BatchPayloadBuilder builder, final List<BatchRequestItem> expectedBatch) throws IOException {
+    public void testHttpRequests(
+            final BatchPayloadBuilder builder,
+            final List<BatchRequestItem> expectedBatch) throws IOException {
         List<BatchRequestItem> actualBatch = BatchPayloadParser.parse(
                 new ByteArrayInputStream(builder.create()),
                 mediaType(builder.getBoundary()),
@@ -939,7 +956,9 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("httpResponseInputs")
-    public void testHttpResponses(final BatchPayloadBuilder builder, final List<BatchResponseItem> expectedBatch) throws IOException {
+    public void testHttpResponses(
+            final BatchPayloadBuilder builder,
+            final List<BatchResponseItem> expectedBatch) throws IOException {
         List<BatchResponseItem> actualBatch = BatchPayloadParser.parse(
                 new ByteArrayInputStream(builder.create()),
                 mediaType(builder.getBoundary()),
