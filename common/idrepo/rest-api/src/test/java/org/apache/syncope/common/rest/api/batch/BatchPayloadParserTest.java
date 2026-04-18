@@ -2,7 +2,9 @@ package org.apache.syncope.common.rest.api.batch;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
 import jakarta.ws.rs.core.MediaType;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
