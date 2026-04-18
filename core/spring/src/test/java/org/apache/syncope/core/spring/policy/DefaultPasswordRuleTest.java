@@ -436,7 +436,7 @@ public class DefaultPasswordRuleTest {
             .mapToObj(c -> (char) c)
             .toList();
 
-    private static DefaultPasswordRuleConf buildSpecialConf(int specials, List<Character> specialChars) {
+    private static DefaultPasswordRuleConf buildSpecialConf(final int specials, final List<Character> specialChars) {
         DefaultRuleConfBuilder builder = DefaultRuleConfBuilder.builder()
                 .maxLen(Integer.MAX_VALUE)
                 .usernameAllowed(true)
@@ -1036,22 +1036,25 @@ public class DefaultPasswordRuleTest {
     @MethodSource("mixedRulesInput")
     public void testMixedRules(
             final DefaultPasswordRuleConf conf,
-            final String username, String password,
+            final String username,
+            final String password,
             final Map<String, List<Object>> attributes,
             final Optional<Class<Exception>> exception) {
         testRule(conf, username, password, attributes, exception);
     }
 
     private void testRule(
-            DefaultPasswordRuleConf conf,
-            String username, String password,
-            Optional<Class<Exception>> exception) {
+            final DefaultPasswordRuleConf conf,
+            final String username,
+            final String password,
+            final Optional<Class<Exception>> exception) {
         testRule(conf, username, password, Map.of(), exception);
     }
 
     private void testRule(
             final DefaultPasswordRuleConf conf,
-            final String username, String password,
+            final String username,
+            final String password,
             final Map<String, List<Object>> attributes,
             final Optional<Class<Exception>> exception) {
         User user = mock(User.class);

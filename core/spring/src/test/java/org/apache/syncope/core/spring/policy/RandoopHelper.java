@@ -20,12 +20,13 @@ package org.apache.syncope.core.spring.policy;
 
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
 
-public class RandoopHelper {
+public final class RandoopHelper {
     public static DefaultPasswordRule setupRule(final DefaultPasswordRuleConf conf) {
         DefaultPasswordRule rule = new DefaultPasswordRule();
         rule.setConf(conf);
         return rule;
     }
 
-    private RandoopHelper() {}
+    private RandoopHelper() {
+    }
 }

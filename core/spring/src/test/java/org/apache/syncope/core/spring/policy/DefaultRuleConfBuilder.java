@@ -18,10 +18,10 @@
  */
 package org.apache.syncope.core.spring.policy;
 
-import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
 
 public class DefaultRuleConfBuilder {
     private int alpha = 0;
@@ -32,7 +32,6 @@ public class DefaultRuleConfBuilder {
     private int maxLen = 0;
     private int specials = 0;
     private int repeatSame = 0;
-    private final Set<Character> illegalChars = new HashSet<>();
     private final Set<Character> specialChars = new HashSet<>();
     private boolean usernameAllowed = false;
     private final Set<String> illegalWords = new HashSet<>();
@@ -47,7 +46,8 @@ public class DefaultRuleConfBuilder {
         return builder().build();
     }
 
-    private DefaultRuleConfBuilder() {}
+    private DefaultRuleConfBuilder() {
+    }
 
     public DefaultPasswordRuleConf build() {
         DefaultPasswordRuleConf conf = new DefaultPasswordRuleConf();
@@ -60,7 +60,6 @@ public class DefaultRuleConfBuilder {
         conf.setMinLength(minLen);
         conf.setMaxLength(maxLen);
         conf.setUsernameAllowed(usernameAllowed);
-        conf.getIllegalChars().addAll(illegalChars);
         conf.getWordsNotPermitted().addAll(illegalWords);
         conf.setRepeatSame(repeatSame);
         conf.getSchemasNotPermitted().addAll(schemas);
