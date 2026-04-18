@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Set;
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
 
-public class DefaultRuleConfBuilder {
+public final class DefaultRuleConfBuilder {
     private int alpha = 0;
     private int digit = 0;
     private int lower = 0;
