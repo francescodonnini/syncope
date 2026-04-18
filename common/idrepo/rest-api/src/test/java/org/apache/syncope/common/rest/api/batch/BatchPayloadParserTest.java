@@ -1,5 +1,6 @@
 package org.apache.syncope.common.rest.api.batch;
 
+import jakarta.ws.rs.core.MediaType;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -7,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
-import jakarta.ws.rs.core.MediaType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -138,7 +138,8 @@ public class BatchPayloadParserTest {
             .line("body")
             .closingDelimiter();
 
-    // The closing boundary does not match with the expected one (they differ by the last letter), expecting IllegalArgumentException
+    // The closing boundary does not match with the expected one
+    // (they differ by the last letter), expecting IllegalArgumentException
     private static final BatchPayloadBuilder BOUND_03 = BatchPayloadBuilder.builder()
             .boundary("boundary")
             .delimiter()
@@ -148,7 +149,8 @@ public class BatchPayloadParserTest {
             .line()
             .line("--boundar--");
 
-    // The closing boundary does not match with the expected one (they differ by the first letter), expecting IllegalArgumentException
+    // The closing boundary does not match with the expected one
+    // (they differ by the first letter), expecting IllegalArgumentException
     private static final BatchPayloadBuilder BOUND_04 = BatchPayloadBuilder.builder()
             .boundary("boundary")
             .delimiter()
@@ -251,13 +253,19 @@ public class BatchPayloadParserTest {
 
     @ParameterizedTest
     @MethodSource("inputs")
-    public void test(final BatchPayloadBuilder builder, final Optional<Integer> expectedNumOfParts, final Optional<Class<Exception>> expectedException) throws IOException {
+    public void test(
+            final BatchPayloadBuilder builder,
+            final Optional<Integer> expectedNumOfParts,
+            final Optional<Class<Exception>> expectedException) throws IOException {
         if (expectedNumOfParts.isEmpty() && expectedException.isEmpty()) {
             throw new IllegalArgumentException("no expected value");
         }
         MediaType mediaType = mediaType(builder.getBoundary());
         if (expectedNumOfParts.isPresent()) {
-            List<BatchRequestItem> actualParts = BatchPayloadParser.parse(new ByteArrayInputStream(builder.create()), mediaType, new BatchRequestItem());
+            List<BatchRequestItem> actualParts = BatchPayloadParser.parse(
+                    new ByteArrayInputStream(builder.create()),
+                    mediaType,
+                    new BatchRequestItem());
             Assertions.assertEquals(expectedNumOfParts.get(), actualParts.size());
             List<String> expectedParts = builder.getParts();
             for (int i = 0; i < actualParts.size(); i++) {
