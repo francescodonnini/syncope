@@ -91,6 +91,9 @@ under the License.
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
+        <configuration>
+          <excludes>**/randoop/**/*.java</excludes>
+        </configuration>
       </plugin>
     </plugins>
   </build>
