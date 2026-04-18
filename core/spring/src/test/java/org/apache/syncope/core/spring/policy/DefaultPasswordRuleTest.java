@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.syncope.core.spring.policy;
 
 import org.apache.syncope.common.lib.policy.DefaultPasswordRuleConf;
@@ -148,10 +166,12 @@ public class DefaultPasswordRuleTest {
                         .digit(2)
                         .build(),
                         "user", "-6pg07{o", Optional.empty()),
-                Arguments.of(DefaultRuleConfBuilder.builder()
-                        .maxLen(Integer.MAX_VALUE)
-                        .usernameAllowed(true)
-                        .digit(Integer.MAX_VALUE).build(), "admin", "1234567890", Optional.of(PasswordPolicyException.class)));
+                Arguments.of(
+                        DefaultRuleConfBuilder.builder()
+                            .maxLen(Integer.MAX_VALUE)
+                            .usernameAllowed(true)
+                            .digit(Integer.MAX_VALUE).build(),
+                        "admin", "1234567890", Optional.of(PasswordPolicyException.class)));
     }
 
     @ParameterizedTest
@@ -302,7 +322,11 @@ public class DefaultPasswordRuleTest {
                         .build(),
                         null, "a", Optional.empty()),
                 // I was expecting an Exception to be thrown, but it didn't
-                // Arguments.of(DefaultRuleConfBuilder.builder().maxLen(Integer.MAX_VALUE).usernameAllowed(true).minLen(0).build(), "", null, Optional.empty()),
+                // Arguments.of(
+                //    DefaultRuleConfBuilder.builder()
+                //        .maxLen(Integer.MAX_VALUE)
+                //        .usernameAllowed(true)
+                //        .minLen(0).build(), "", null, Optional.empty()),
                 Arguments.of(DefaultRuleConfBuilder.builder()
                         .maxLen(Integer.MAX_VALUE)
                         .usernameAllowed(true)
@@ -421,18 +445,42 @@ public class DefaultPasswordRuleTest {
 
     private static Stream<Arguments> specialRuleInput() {
         return Stream.of(
-                Arguments.of(buildSpecialConf(1, List.of()), null, "a", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(buildSpecialConf(0, List.of()), "", null, Optional.empty()),
-                Arguments.of(buildSpecialConf(0, List.of('*', '^')), "a", "p#", Optional.empty()),
-                Arguments.of(buildSpecialConf(1, SPECIAL), "#us!", "password", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(buildSpecialConf(1, List.of('!', '"', '£')), "admin", "67buyh..!", Optional.empty()),
-                Arguments.of(buildSpecialConf(2, SPECIAL), "mrossi", "#523432fsf", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(buildSpecialConf(2, List.of('a', 'b', 'c', '1', '2')), "fverdi", "HG£abS23ù", Optional.empty()),
-                Arguments.of(buildSpecialConf(1, List.of('a', 'b')), "bh2ùa", "Aword", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(buildSpecialConf(1, List.of('a', 'a', 'a')), null, "aHJ~àF", Optional.empty()),
-                Arguments.of(buildSpecialConf(1, SPECIAL), "8!3$", "", Optional.of(PasswordPolicyException.class)),
-                Arguments.of(buildSpecialConf(1, List.of('イ', 'ン', 'ス')), "user", "ンスa", Optional.empty()),
-                Arguments.of(buildSpecialConf(1, List.of(' ', '\t', '\n')), null, "a strange\tpassword", Optional.empty()));
+                Arguments.of(
+                        buildSpecialConf(1, List.of()),
+                        null, "a", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        buildSpecialConf(0, List.of()),
+                        "", null, Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(0, List.of('*', '^')),
+                        "a", "p#", Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(1, SPECIAL),
+                        "#us!", "password", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        buildSpecialConf(1, List.of('!', '"', '£')),
+                        "admin", "67buyh..!", Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(2, SPECIAL),
+                        "mrossi", "#523432fsf", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        buildSpecialConf(2, List.of('a', 'b', 'c', '1', '2')),
+                        "fverdi", "HG£abS23ù", Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(1, List.of('a', 'b')),
+                        "bh2ùa", "Aword", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        buildSpecialConf(1, List.of('a', 'a', 'a')),
+                        null, "aHJ~àF", Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(1, SPECIAL),
+                        "8!3$", "", Optional.of(PasswordPolicyException.class)),
+                Arguments.of(
+                        buildSpecialConf(1, List.of('イ', 'ン', 'ス')),
+                        "user", "ンスa", Optional.empty()),
+                Arguments.of(
+                        buildSpecialConf(1, List.of(' ', '\t', '\n')),
+                        null, "a strange\tpassword", Optional.empty()));
     }
 
     @ParameterizedTest
@@ -460,7 +508,12 @@ public class DefaultPasswordRuleTest {
                         .repeatSame(-1)
                         .build(),
                         "", "aaa", Optional.empty()),
-                // Arguments.of(DefaultRuleConfBuilder.builder().maxLen(Integer.MAX_VALUE).usernameAllowed(true).repeatSame(1).build(), "6%g", "klR2", Optional.of(IllegalStateException.class)),
+                // Arguments.of(
+                //      DefaultRuleConfBuilder.builder()
+                //          .maxLen(Integer.MAX_VALUE)
+                //          .usernameAllowed(true)
+                //          .repeatSame(1)
+                //          .build(), "6%g", "klR2", Optional.of(IllegalStateException.class)),
                 Arguments.of(DefaultRuleConfBuilder.builder()
                         .maxLen(Integer.MAX_VALUE)
                         .usernameAllowed(true)
@@ -781,7 +834,12 @@ public class DefaultPasswordRuleTest {
                                 .build(),
                         "admin",
                         "a19700101b",
-                        Map.of("birth", List.of("19700101"), "email", List.of("ZiAk3H6bRx@2A8I7S.com", "281EhhtBhL@ciAZgW.com", "11WX06CT5M@dNSM5g.com")),
+                        Map.of(
+                                "birth", List.of("19700101"),
+                                "email",
+                                List.of("ZiAk3H6bRx@2A8I7S.com",
+                                        "281EhhtBhL@ciAZgW.com",
+                                        "11WX06CT5M@dNSM5g.com")),
                         Optional.of(PasswordPolicyException.class)),
                 Arguments.of(
                         DefaultRuleConfBuilder.empty(),
@@ -813,7 +871,10 @@ public class DefaultPasswordRuleTest {
                                 .build(),
                         "admin",
                         "a197001iAk3H6bRx@2A8I7S.com01",
-                        Map.of("birth", List.of("19700101"), "email", List.of("ZiAk3H6bRx@2A8I7S.com", "281EhhtBhL@ciAZgW.com", "11WX06CT5M@dNSM5g.com")),
+                        Map.of(
+                                "birth", List.of("19700101"),
+                                "email",
+                                List.of("ZiAk3H6bRx@2A8I7S.com", "281EhhtBhL@ciAZgW.com", "11WX06CT5M@dNSM5g.com")),
                         Optional.empty()));
     }
 
@@ -1007,7 +1068,8 @@ public class DefaultPasswordRuleTest {
                             } else if (o instanceof String) {
                                 return o.toString();
                             } else {
-                                throw new IllegalArgumentException("type not supported " + o.getClass().getCanonicalName());
+                                throw new IllegalArgumentException(
+                                        "type not supported " + o.getClass().getCanonicalName());
                             }
                         }).toList();
                 when(attr.getValuesAsStrings()).thenReturn(values);

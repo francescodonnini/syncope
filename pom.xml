@@ -2055,6 +2055,7 @@ under the License.
             <exclude>**/*font*awesome*</exclude>
             <exclude>**/banner.txt</exclude>
             <exclude>**/target/**</exclude>
+            <exclude>**/src/test/resources/methods.txt</exclude>
           </excludes>
         </configuration>
         <executions>
