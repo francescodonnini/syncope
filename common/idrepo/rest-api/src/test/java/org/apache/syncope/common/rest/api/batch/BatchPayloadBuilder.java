@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-public class BatchPayloadBuilder {
+public final class BatchPayloadBuilder {
     private static final String EOL = "\n";
     private static final String CRLF = "\r\n";
     private static final String ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";

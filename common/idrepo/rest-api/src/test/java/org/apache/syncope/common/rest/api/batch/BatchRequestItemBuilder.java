@@ -2,7 +2,7 @@ package org.apache.syncope.common.rest.api.batch;
 
 import java.util.ArrayList;
 
-public class BatchRequestItemBuilder {
+public final class BatchRequestItemBuilder {
     private final BatchRequestItem item = new BatchRequestItem();
     private final StringBuilder content = new StringBuilder();
 
@@ -13,36 +13,36 @@ public class BatchRequestItemBuilder {
     private BatchRequestItemBuilder() {
     }
 
-    public BatchRequestItemBuilder method(String method) {
+    public BatchRequestItemBuilder method(final String method) {
         item.setMethod(method);
         return this;
     }
 
-    public BatchRequestItemBuilder uri(String uri) {
+    public BatchRequestItemBuilder uri(final String uri) {
         item.setRequestURI(uri);
         return this;
     }
 
-    public BatchRequestItemBuilder query(String queryString) {
+    public BatchRequestItemBuilder query(final String queryString) {
         item.setQueryString(queryString);
         return this;
     }
 
-    public BatchRequestItemBuilder header(String key, String value) {
+    public BatchRequestItemBuilder header(final String key, final String value) {
         item.getHeaders().computeIfAbsent(key, k -> new ArrayList<>()).add(value);
         return this;
     }
 
-    public BatchRequestItemBuilder content(String content) {
+    public BatchRequestItemBuilder content(final String content) {
         this.content.append(content);
         return this;
     }
 
-    public BatchRequestItemBuilder line(String line) {
+    public BatchRequestItemBuilder line(final String line) {
         return line(line, false);
     }
 
-    public BatchRequestItemBuilder line(String line, boolean unixEol) {
+    public BatchRequestItemBuilder line(final String line, final boolean unixEol) {
         content.append(line);
         if (unixEol) {
             content.append("\n");

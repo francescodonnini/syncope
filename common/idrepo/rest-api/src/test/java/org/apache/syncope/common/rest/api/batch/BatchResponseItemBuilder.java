@@ -2,7 +2,7 @@ package org.apache.syncope.common.rest.api.batch;
 
 import java.util.ArrayList;
 
-public class BatchResponseItemBuilder {
+public final class BatchResponseItemBuilder {
     private final BatchResponseItem item = new BatchResponseItem();
     private final StringBuilder content = new StringBuilder();
 
@@ -13,26 +13,26 @@ public class BatchResponseItemBuilder {
     private BatchResponseItemBuilder() {
     }
 
-    public BatchResponseItemBuilder status(int status) {
+    public BatchResponseItemBuilder status(final int status) {
         item.setStatus(status);
         return this;
     }
 
-    public BatchResponseItemBuilder header(String key, String value) {
+    public BatchResponseItemBuilder header(final String key, final String value) {
         item.getHeaders().computeIfAbsent(key, k -> new ArrayList<>()).add(value);
         return this;
     }
 
-    public BatchResponseItemBuilder content(String content) {
+    public BatchResponseItemBuilder content(final String content) {
         this.content.append(content);
         return this;
     }
 
-    public BatchResponseItemBuilder line(String line) {
+    public BatchResponseItemBuilder line(final String line) {
         return line(line, false);
     }
 
-    public BatchResponseItemBuilder line(String line, boolean unixEol) {
+    public BatchResponseItemBuilder line(final String line, final boolean unixEol) {
         content.append(line);
         if (unixEol) {
             content.append("\n");

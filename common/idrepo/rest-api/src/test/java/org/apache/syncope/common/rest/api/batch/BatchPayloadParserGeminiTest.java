@@ -18,13 +18,13 @@ import org.junit.jupiter.api.Test;
 
 public class BatchPayloadParserGeminiTest {
 
-    private MediaType createMediaTypeWithBoundary(String boundary) {
+    private MediaType createMediaTypeWithBoundary(final String boundary) {
         Map<String, String> parameters = new HashMap<>();
         parameters.put(RESTHeaders.BOUNDARY_PARAMETER, boundary);
         return new MediaType("multipart", "mixed", parameters);
     }
 
-    private InputStream createInputStream(String payload) {
+    private InputStream createInputStream(final String payload) {
         return new ByteArrayInputStream(payload.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -50,7 +50,7 @@ public class BatchPayloadParserGeminiTest {
         assertNotNull(items);
         assertEquals(1, items.size());
 
-        BatchRequestItem item = items.get(0);
+        BatchRequestItem item = items.getFirst();
         assertEquals("POST", item.getMethod());
         assertEquals("/users", item.getRequestURI());
         assertEquals("active=true", item.getQueryString());
@@ -60,7 +60,7 @@ public class BatchPayloadParserGeminiTest {
 
         // Assert Headers
         assertTrue(item.getHeaders().containsKey("Content-Type"));
-        assertEquals("application/json", item.getHeaders().get("Content-Type").get(0));
+        assertEquals("application/json", item.getHeaders().get("Content-Type").getFirst());
     }
 
     @Test
@@ -84,7 +84,7 @@ public class BatchPayloadParserGeminiTest {
         assertNotNull(items);
         assertEquals(1, items.size());
 
-        BatchResponseItem item = items.get(0);
+        BatchResponseItem item = items.getFirst();
         assertEquals(201, item.getStatus());
 
         // Assert Content without the trailing \r\n
@@ -92,7 +92,7 @@ public class BatchPayloadParserGeminiTest {
 
         // Assert Headers
         assertTrue(item.getHeaders().containsKey("ETag"));
-        assertEquals("\"123456\"", item.getHeaders().get("ETag").get(0));
+        assertEquals("\"123456\"", item.getHeaders().get("ETag").getFirst());
     }
 
     @Test
@@ -120,8 +120,8 @@ public class BatchPayloadParserGeminiTest {
         assertNotNull(items);
         assertEquals(2, items.size());
 
-        assertEquals("POST", items.get(0).getMethod());
-        assertEquals("/users", items.get(0).getRequestURI());
+        assertEquals("POST", items.getFirst().getMethod());
+        assertEquals("/users", items.getFirst().getRequestURI());
         assertNull(items.get(0).getQueryString());
 
         // Assert Content without the trailing \r\n
