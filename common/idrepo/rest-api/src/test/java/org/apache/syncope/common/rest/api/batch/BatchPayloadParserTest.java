@@ -1011,7 +1011,10 @@ public class BatchPayloadParserTest {
                 + "--bnd\n   "
                 + " a bdiod\r\n"
                 + "--bnd--").getBytes();
-        List<BatchRequestItem> batches = BatchPayloadParser.parse(new ByteArrayInputStream(data), mediaType("bnd"), new BatchRequestItem());
+        List<BatchRequestItem> batches = BatchPayloadParser.parse(
+                new ByteArrayInputStream(data),
+                mediaType("bnd"),
+                new BatchRequestItem());
         Assertions.assertEquals(2, batches.size());
     }
 
@@ -1028,7 +1031,10 @@ public class BatchPayloadParserTest {
                 .line("Accept: application/json")
                 .closingDelimiter(10)
                 .create();
-        List<BatchResponseItem> items = BatchPayloadParser.parse(new ByteArrayInputStream(payload), mediaType(boundary), new BatchResponseItem());
+        List<BatchResponseItem> items = BatchPayloadParser.parse(
+                new ByteArrayInputStream(payload),
+                mediaType(boundary),
+                new BatchResponseItem());
         Assertions.assertEquals(1, items.size());
     }
 }
