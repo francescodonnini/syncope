@@ -22,7 +22,6 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import java.io.IOException;
@@ -41,9 +40,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.client.lib.SyncopeClientFactoryBean;
+import org.apache.syncope.common.lib.jackson.SyncopeJsonMapper;
+import org.apache.syncope.common.rest.api.service.AttrRepoService;
 import org.apache.syncope.common.rest.api.service.ClientAppService;
 import org.apache.syncope.common.rest.api.service.ImplementationService;
 import org.apache.syncope.common.rest.api.service.OIDCC4UIProviderService;
+import org.apache.syncope.common.rest.api.service.OIDCOpEntityService;
 import org.apache.syncope.common.rest.api.service.PolicyService;
 import org.apache.syncope.common.rest.api.service.SAML2IdPEntityService;
 import org.apache.syncope.common.rest.api.service.SAML2SP4UIIdPService;
@@ -58,12 +60,13 @@ import org.jsoup.nodes.FormElement;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.json.JsonMapper;
 
 public abstract class AbstractITCase {
 
     protected static final Logger LOG = LoggerFactory.getLogger(AbstractITCase.class);
 
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
+    protected static final JsonMapper MAPPER = new SyncopeJsonMapper();
 
     protected static final String ADMIN_UNAME = "admin";
 
@@ -95,6 +98,8 @@ public abstract class AbstractITCase {
 
     protected static PolicyService POLICY_SERVICE;
 
+    protected static OIDCOpEntityService OIDC_OP_ENTITY_SERVICE;
+
     protected static ClientAppService CLIENT_APP_SERVICE;
 
     protected static WAConfigService WA_CONFIG_SERVICE;
@@ -105,6 +110,8 @@ public abstract class AbstractITCase {
 
     protected static OIDCC4UIProviderService OIDCC4UI_PROVIDER_SERVICE;
 
+    protected static AttrRepoService ATTR_REPO_SERVICE;
+
     @BeforeAll
     public static void restSetup() {
         CLIENT_FACTORY = new SyncopeClientFactoryBean().setAddress(CORE_ADDRESS);
@@ -114,11 +121,13 @@ public abstract class AbstractITCase {
         TASK_SERVICE = ADMIN_CLIENT.getService(TaskService.class);
         USER_SERVICE = ADMIN_CLIENT.getService(UserService.class);
         POLICY_SERVICE = ADMIN_CLIENT.getService(PolicyService.class);
+        OIDC_OP_ENTITY_SERVICE = ADMIN_CLIENT.getService(OIDCOpEntityService.class);
         CLIENT_APP_SERVICE = ADMIN_CLIENT.getService(ClientAppService.class);
         WA_CONFIG_SERVICE = ADMIN_CLIENT.getService(WAConfigService.class);
         SRA_ROUTE_SERVICE = ADMIN_CLIENT.getService(SRARouteService.class);
         SAML2SP4UI_IDP_SERVICE = ADMIN_CLIENT.getService(SAML2SP4UIIdPService.class);
         OIDCC4UI_PROVIDER_SERVICE = ADMIN_CLIENT.getService(OIDCC4UIProviderService.class);
+        ATTR_REPO_SERVICE = ADMIN_CLIENT.getService(AttrRepoService.class);
     }
 
     @BeforeAll
@@ -239,7 +248,8 @@ public abstract class AbstractITCase {
             final String password,
             final String body,
             final CloseableHttpClient httpclient,
-            final HttpClientContext context)
+            final HttpClientContext context,
+            final String... tenant)
             throws IOException {
 
         List<NameValuePair> form = new ArrayList<>();
@@ -249,7 +259,7 @@ public abstract class AbstractITCase {
         form.add(new BasicNameValuePair("password", password));
         form.add(new BasicNameValuePair("geolocation", ""));
 
-        HttpPost post = new HttpPost(WA_ADDRESS + "/login");
+        HttpPost post = new HttpPost(WA_ADDRESS + (tenant.length == 0 ? "" : "/tenants/" + tenant[0]) + "/login");
         post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
         post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
         post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));

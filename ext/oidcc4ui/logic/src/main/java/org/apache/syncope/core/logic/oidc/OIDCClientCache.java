@@ -39,6 +39,7 @@ import org.apache.syncope.core.persistence.api.entity.OIDCC4UIProvider;
 import org.pac4j.core.http.callback.NoParameterCallbackUrlResolver;
 import org.pac4j.oidc.client.OidcClient;
 import org.pac4j.oidc.config.OidcConfiguration;
+import org.pac4j.oidc.credentials.clientauth.DefaultClientAuthenticationBuilder;
 import org.pac4j.oidc.metadata.StaticOidcOpMetadataResolver;
 import org.pac4j.oidc.profile.creator.TokenValidator;
 import org.slf4j.Logger;
@@ -112,7 +113,12 @@ public class OIDCClientCache {
                 Optional.ofNullable(op.getEndSessionEndpoint()).map(URI::create).orElse(null));
         if (op.getHasDiscovery()) {
             try {
-                metadata.setIDTokenJWSAlgs(fetchMetadata(op.getIssuer()).getIDTokenJWSAlgs());
+                OIDCProviderMetadata fetched = fetchMetadata(op.getIssuer());
+
+                metadata.setIDTokenJWSAlgs(fetched.getIDTokenJWSAlgs());
+
+                metadata.setSupportsBackChannelLogout(fetched.supportsBackChannelLogout());
+                metadata.setSupportsBackChannelLogoutSession(fetched.supportsBackChannelLogoutSession());
             } catch (Exception e) {
                 LOG.error("While fetching OIDC metadata for issuer {}", op.getIssuer(), e);
                 metadata.setIDTokenJWSAlgs(List.of(JWSAlgorithm.HS256));
@@ -126,19 +132,18 @@ public class OIDCClientCache {
             }
 
             @Override
-            public ClientAuthentication getClientAuthentication() {
-                if (clientAuthentication == null) {
-                    clientAuthentication = computeClientAuthentication();
+            public ClientAuthentication getClientAuthenticationTokenEndpoint() {
+                if (clientAuthToken == null) {
+                    clientAuthToken = new DefaultClientAuthenticationBuilder(
+                            configuration, metadata, metadata.getTokenEndpointURI());
+                    clientAuthToken.buildClientAuthentication();
                 }
-                return clientAuthentication;
+                return super.getClientAuthenticationTokenEndpoint();
             }
 
             @Override
-            public TokenValidator getTokenValidator() {
-                if (tokenValidator == null) {
-                    tokenValidator = new TokenValidator(configuration, metadata);
-                }
-                return tokenValidator;
+            protected TokenValidator createTokenValidator() {
+                return new TokenValidator(configuration, metadata);
             }
         });
 

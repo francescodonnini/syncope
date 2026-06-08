@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.types.CipherAlgorithm;
 import org.apache.syncope.core.persistence.api.ApplicationContextProvider;
 import org.apache.syncope.core.persistence.api.EncryptorManager;
@@ -53,11 +54,11 @@ public class Neo4jLinkedAccount extends AbstractGeneratedKeyNode implements Link
     private String connObjectKeyValue;
 
     @NotNull
-    @Relationship(direction = Relationship.Direction.OUTGOING)
+    @Relationship(direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     private Neo4jUser owner;
 
     @NotNull
-    @Relationship(direction = Relationship.Direction.OUTGOING)
+    @Relationship(direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     private Neo4jExternalResource resource;
 
     private String username;
@@ -150,7 +151,7 @@ public class Neo4jLinkedAccount extends AbstractGeneratedKeyNode implements Link
                         orElseGet(() -> CipherAlgorithm.valueOf(
                         ApplicationContextProvider.getBeanFactory().getBean(ConfParamOps.class).get(
                                 AuthContextUtils.getDomain(),
-                                "password.cipher.algorithm",
+                                StandardConfParams.PASSWORD_CIPHER_ALGORITHM,
                                 CipherAlgorithm.AES.name(),
                                 String.class))));
     }

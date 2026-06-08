@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.persistence.neo4j.entity.am;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.validation.constraints.NotNull;
 import java.util.HashSet;
 import java.util.Set;
@@ -35,6 +34,7 @@ import org.apache.syncope.core.provisioning.api.serialization.POJOHelper;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.PostLoad;
+import tools.jackson.core.type.TypeReference;
 
 @Node(Neo4jOIDCRPClientApp.NODE)
 public class Neo4jOIDCRPClientApp extends AbstractClientApp implements OIDCRPClientApp {
@@ -118,6 +118,19 @@ public class Neo4jOIDCRPClientApp extends AbstractClientApp implements OIDCRPCli
     private OIDCClientAuthenticationMethod tokenEndpointAuthenticationMethod;
 
     private String logoutUri;
+
+
+    private String accessTokenMaxTimeToLive;
+
+    private String accessTokenTimeToKill;
+
+    private Long accessTokenMaxActiveTokens;
+
+    private String refreshTokenTimeToKill;
+
+    private Long refreshTokenMaxActiveTokens;
+
+    private String deviceTokenTimeToKill;
 
     @Override
     public Set<String> getRedirectUris() {
@@ -341,6 +354,66 @@ public class Neo4jOIDCRPClientApp extends AbstractClientApp implements OIDCRPCli
         this.logoutUri = logoutUri;
     }
 
+    @Override
+    public String getDeviceTokenTimeToKill() {
+        return deviceTokenTimeToKill;
+    }
+
+    @Override
+    public void setDeviceTokenTimeToKill(final String deviceTokenTimeToKill) {
+        this.deviceTokenTimeToKill = deviceTokenTimeToKill;
+    }
+
+    @Override
+    public Long getRefreshTokenMaxActiveTokens() {
+        return refreshTokenMaxActiveTokens;
+    }
+
+    @Override
+    public void setRefreshTokenMaxActiveTokens(final Long refreshTokenMaxActiveTokens) {
+        this.refreshTokenMaxActiveTokens = refreshTokenMaxActiveTokens;
+    }
+
+    @Override
+    public String getRefreshTokenTimeToKill() {
+        return refreshTokenTimeToKill;
+    }
+
+    @Override
+    public void setRefreshTokenTimeToKill(final String refreshTokenTimeToKill) {
+        this.refreshTokenTimeToKill = refreshTokenTimeToKill;
+    }
+
+    @Override
+    public Long getAccessTokenMaxActiveTokens() {
+        return accessTokenMaxActiveTokens;
+    }
+
+    @Override
+    public void setAccessTokenMaxActiveTokens(final Long accessTokenMaxActiveTokens) {
+        this.accessTokenMaxActiveTokens = accessTokenMaxActiveTokens;
+    }
+
+    @Override
+    public String getAccessTokenTimeToKill() {
+        return accessTokenTimeToKill;
+    }
+
+    @Override
+    public void setAccessTokenTimeToKill(final String accessTokenTimeToKill) {
+        this.accessTokenTimeToKill = accessTokenTimeToKill;
+    }
+
+    @Override
+    public String getAccessTokenMaxTimeToLive() {
+        return accessTokenMaxTimeToLive;
+    }
+
+    @Override
+    public void setAccessTokenMaxTimeToLive(final String accessTokenMaxTimeToLive) {
+        this.accessTokenMaxTimeToLive = accessTokenMaxTimeToLive;
+    }
+    
     protected void json2list(final boolean clearFirst) {
         if (clearFirst) {
             getRedirectUris().clear();

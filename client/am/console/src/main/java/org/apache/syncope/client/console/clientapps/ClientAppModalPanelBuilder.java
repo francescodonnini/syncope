@@ -20,6 +20,7 @@ package org.apache.syncope.client.console.clientapps;
 
 import jakarta.ws.rs.core.MediaType;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ import org.apache.syncope.client.console.SyncopeWebApplication;
 import org.apache.syncope.client.console.commons.RealmsUtils;
 import org.apache.syncope.client.console.panels.AbstractModalPanel;
 import org.apache.syncope.client.console.rest.ClientAppRestClient;
+import org.apache.syncope.client.console.rest.OIDCOpEntityRestClient;
 import org.apache.syncope.client.console.rest.PolicyRestClient;
 import org.apache.syncope.client.console.rest.RealmRestClient;
 import org.apache.syncope.client.console.wicket.markup.html.bootstrap.dialog.BaseModal;
@@ -55,7 +57,7 @@ import org.apache.syncope.client.ui.commons.pages.BaseWebPage;
 import org.apache.syncope.client.ui.commons.panels.WizardModalPanel;
 import org.apache.syncope.client.ui.commons.wizards.AbstractModalPanelBuilder;
 import org.apache.syncope.client.ui.commons.wizards.AjaxWizard;
-import org.apache.syncope.common.lib.OIDCScopeConstants;
+import org.apache.syncope.common.lib.OIDCStandardScope;
 import org.apache.syncope.common.lib.policy.PolicyTO;
 import org.apache.syncope.common.lib.to.ClientAppTO;
 import org.apache.syncope.common.lib.to.OIDCRPClientAppTO;
@@ -63,6 +65,7 @@ import org.apache.syncope.common.lib.to.RealmTO;
 import org.apache.syncope.common.lib.to.SAML2SPClientAppTO;
 import org.apache.syncope.common.lib.types.ClientAppType;
 import org.apache.syncope.common.lib.types.LogoutType;
+import org.apache.syncope.common.lib.types.MetadataCriteriaDirection;
 import org.apache.syncope.common.lib.types.OIDCApplicationType;
 import org.apache.syncope.common.lib.types.OIDCClientAuthenticationMethod;
 import org.apache.syncope.common.lib.types.OIDCGrantType;
@@ -72,7 +75,9 @@ import org.apache.syncope.common.lib.types.OIDCTokenEncryptionAlg;
 import org.apache.syncope.common.lib.types.OIDCTokenEncryptionEncoding;
 import org.apache.syncope.common.lib.types.OIDCTokenSigningAlg;
 import org.apache.syncope.common.lib.types.PolicyType;
+import org.apache.syncope.common.lib.types.SAML2BindingType;
 import org.apache.syncope.common.lib.types.SAML2SPNameId;
+import org.apache.syncope.common.lib.types.SigningCredentialType;
 import org.apache.syncope.common.lib.types.XmlSecAlgorithm;
 import org.apache.syncope.common.rest.api.service.SAML2IdPEntityService;
 import org.apache.wicket.Component;
@@ -87,11 +92,28 @@ import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.model.util.ListModel;
+import org.apache.wicket.validation.IValidatable;
+import org.apache.wicket.validation.IValidator;
+import org.apache.wicket.validation.ValidationError;
 import org.apache.wicket.validation.validator.UrlValidator;
 
 public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractModalPanelBuilder<T> {
 
     private static final long serialVersionUID = 5945391813567245081L;
+
+    protected static class DurationValidator implements IValidator<String> {
+
+        private static final long serialVersionUID = 3978328825079032964L;
+
+        @Override
+        public void validate(final IValidatable<String> validatable) {
+            try {
+                Duration.parse(validatable.getValue());
+            } catch (Exception e) {
+                validatable.error(new ValidationError(this));
+            }
+        }
+    }
 
     protected final IModel<Map<String, String>> accessPolicies = new LoadableDetachableModel<>() {
 
@@ -147,6 +169,8 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
 
     protected final RealmRestClient realmRestClient;
 
+    protected final OIDCOpEntityRestClient oidcOpEntityRestClient;
+
     public ClientAppModalPanelBuilder(
             final ClientAppType type,
             final T defaultItem,
@@ -154,6 +178,7 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
             final PolicyRestClient policyRestClient,
             final ClientAppRestClient clientAppRestClient,
             final RealmRestClient realmRestClient,
+            final OIDCOpEntityRestClient oidcOpEntityRestClient,
             final PageReference pageRef) {
 
         super(defaultItem, pageRef);
@@ -162,6 +187,7 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
         this.policyRestClient = policyRestClient;
         this.clientAppRestClient = clientAppRestClient;
         this.realmRestClient = realmRestClient;
+        this.oidcOpEntityRestClient = oidcOpEntityRestClient;
     }
 
     @Override
@@ -196,7 +222,7 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                 protected Iterator<String> getChoices(final String input) {
                     return realmRestClient.search(fullRealmsTree
                             ? RealmsUtils.buildBaseQuery()
-                            : RealmsUtils.buildKeywordQuery(input)).getResult().stream().
+                            : RealmsUtils.buildNameQuery(input)).getResult().stream().
                             map(RealmTO::getFullPath).iterator();
                 }
             };
@@ -378,7 +404,7 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                     applicationType.setChoices(List.of(OIDCApplicationType.values()));
                     fields.add(applicationType.addRequiredLabel().setEnabled(true));
 
-                    AjaxTextFieldPanel redirectUri = new AjaxTextFieldPanel("panel", "redirectUris", new Model<>());
+                    AjaxTextFieldPanel redirectUri = new AjaxTextFieldPanel("panel", "redirectUris", Model.of());
                     fields.add(new MultiFieldPanel.Builder<String>(
                             new PropertyModel<>(clientAppTO, "redirectUris")).build(
                             "field",
@@ -395,21 +421,12 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                             new PropertyModel<>(clientAppTO, "supportedResponseTypes"),
                             new ListModel<>(List.of(OIDCResponseType.values()))));
 
-                    AutoCompleteSettings scopesSettings = new AutoCompleteSettings();
-                    scopesSettings.setShowCompleteListOnFocusGain(true);
-                    scopesSettings.setShowListOnEmptyInput(true);
-                    AjaxSearchFieldPanel scopes = new AjaxSearchFieldPanel(
-                            "panel", "scopes", new PropertyModel<>(clientAppTO, "scopes"), scopesSettings) {
-
-                        private static final long serialVersionUID = 7160878678968866138L;
-
-                        @Override
-                        protected Iterator<String> getChoices(final String input) {
-                            List<String> choices = new ArrayList<>(OIDCScopeConstants.ALL_STANDARD_SCOPES);
-                            choices.add(OIDCScopeConstants.SYNCOPE);
-                            return choices.iterator();
-                        }
-                    };
+                    AjaxTextFieldPanel scopes = new AjaxTextFieldPanel("panel", "scopes", Model.of());
+                    scopes.setChoices(Stream.concat(Stream.of(OIDCStandardScope.values()).map(OIDCStandardScope::name),
+                            Optional.ofNullable(oidcOpEntityRestClient.get().get()).
+                                    map(oidcOpEntity -> oidcOpEntity.getCustomScopes().keySet().stream()).
+                                    orElseGet(() -> Stream.empty())).
+                            distinct().sorted().toList());
                     fields.add(new MultiFieldPanel.Builder<String>(
                             new PropertyModel<>(clientAppTO, "scopes")).build(
                             "field",
@@ -465,6 +482,38 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                                     false);
                     tokenEndpointAuthenticationMethod.setChoices(List.of(OIDCClientAuthenticationMethod.values()));
                     fields.add(tokenEndpointAuthenticationMethod);
+
+                    AjaxTextFieldPanel accessTokenMaxTimeToLive = new AjaxTextFieldPanel(
+                            "field", "accessTokenMaxTimeToLive",
+                            new PropertyModel<>(clientAppTO, "accessTokenMaxTimeToLive"), false);
+                    fields.add(accessTokenMaxTimeToLive);
+
+                    AjaxTextFieldPanel accessTokenTimeToKill = new AjaxTextFieldPanel(
+                            "field", "accessTokenTimeToKill", new PropertyModel<>(clientAppTO, "accessTokenTimeToKill"),
+                            false);
+                    fields.add(accessTokenTimeToKill);
+
+                    AjaxNumberFieldPanel<Long> accessTokenMaxActiveTokens = new AjaxNumberFieldPanel.Builder<Long>()
+                            .enableOnChange()
+                            .build("field", "accessTokenMaxActiveTokens", Long.class,
+                                    new PropertyModel<>(clientAppTO, "accessTokenMaxActiveTokens"));
+                    fields.add(accessTokenMaxActiveTokens);
+
+                    AjaxTextFieldPanel refreshTokenTimeToKill = new AjaxTextFieldPanel(
+                            "field", "refreshTokenTimeToKill",
+                            new PropertyModel<>(clientAppTO, "refreshTokenTimeToKill"), false);
+                    fields.add(refreshTokenTimeToKill);
+
+                    AjaxNumberFieldPanel<Long> refreshTokenMaxActiveTokens = new AjaxNumberFieldPanel.Builder<Long>()
+                            .enableOnChange()
+                            .build("field", "refreshTokenMaxActiveTokens", Long.class,
+                                    new PropertyModel<>(clientAppTO, "refreshTokenMaxActiveTokens"));
+                    fields.add(refreshTokenMaxActiveTokens);
+
+                    AjaxTextFieldPanel deviceTokenTimeToKill = new AjaxTextFieldPanel(
+                            "field", "deviceTokenTimeToKill", new PropertyModel<>(clientAppTO, "deviceTokenTimeToKill"),
+                            false);
+                    fields.add(deviceTokenTimeToKill);
                     break;
 
                 case SAML2SP:
@@ -490,6 +539,46 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                             "field", "metadataSignatureLocation",
                             new PropertyModel<>(clientAppTO, "metadataSignatureLocation"), false));
 
+                    AjaxDropDownChoicePanel<MetadataCriteriaDirection> metadataCriteriaDirection =
+                            new AjaxDropDownChoicePanel<>(
+                                    "field", "metadataCriteriaDirection",
+                                    new PropertyModel<>(clientAppTO, "metadataCriteriaDirection"),
+                                    false);
+                    metadataCriteriaDirection.setChoices(List.of(MetadataCriteriaDirection.values()));
+                    fields.add(metadataCriteriaDirection);
+
+                    fields.add(new AjaxTextFieldPanel(
+                            "field", "metadataCriteriaPattern",
+                            new PropertyModel<>(clientAppTO, "metadataCriteriaPattern"), false));
+
+                    fields.add(new AjaxTextFieldPanel(
+                            "field", "subjectLocality",
+                            new PropertyModel<>(clientAppTO, "subjectLocality"), false));
+
+                    AjaxDropDownChoicePanel<SigningCredentialType> signingCredentialType =
+                            new AjaxDropDownChoicePanel<>(
+                                    "field", "signingCredentialType",
+                                    new PropertyModel<>(clientAppTO, "signingCredentialType"),
+                                    false);
+                    signingCredentialType.setChoices(List.of(SigningCredentialType.values()));
+                    fields.add(signingCredentialType);
+
+                    AjaxDropDownChoicePanel<SAML2BindingType> logoutResponseBinding =
+                            new AjaxDropDownChoicePanel<>(
+                                    "field", "logoutResponseBinding",
+                                    new PropertyModel<>(clientAppTO, "logoutResponseBinding"),
+                                    false);
+                    logoutResponseBinding.setChoices(List.of(SAML2BindingType.values()));
+                    fields.add(logoutResponseBinding);
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "logoutResponseEnabled",
+                            new PropertyModel<>(clientAppTO, "logoutResponseEnabled")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "requireSignedRoot",
+                            new PropertyModel<>(clientAppTO, "requireSignedRoot")));
+
                     fields.add(new AjaxCheckBoxPanel(
                             "field", "signAssertions", new PropertyModel<>(clientAppTO, "signAssertions")));
 
@@ -502,6 +591,78 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                     fields.add(new AjaxCheckBoxPanel(
                             "field", "encryptAssertions", new PropertyModel<>(clientAppTO, "encryptAssertions")));
 
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "encryptAttributes",
+                            new PropertyModel<>(clientAppTO, "encryptAttributes")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingAssertionNameId",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingAssertionNameId")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationInResponseTo",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationInResponseTo")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingResponseInResponseTo",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingResponseInResponseTo")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationNotOnOrAfter",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationNotOnOrAfter")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationRecipient",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationRecipient")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationRecipient",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationRecipient")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationAddress",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationAddress")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationNotBefore",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationNotBefore")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSubjectConfirmationNameId",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSubjectConfirmationNameId")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingNameIdQualifiers",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingNameIdQualifiers")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingTransientNameId",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingTransientNameId")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipValidatingAuthnRequest",
+                            new PropertyModel<>(clientAppTO, "skipValidatingAuthnRequest")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingServiceProviderNameIdQualifier",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingServiceProviderNameIdQualifier")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingAuthenticatingAuthority",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingAuthenticatingAuthority")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingNameIdQualifier",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingNameIdQualifier")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "skipGeneratingSessionNotOnOrAfter",
+                            new PropertyModel<>(clientAppTO, "skipGeneratingSessionNotOnOrAfter")));
+
+                    fields.add(new AjaxCheckBoxPanel(
+                            "field", "validateMetadataCertificates",
+                            new PropertyModel<>(clientAppTO, "validateMetadataCertificates")));
+
                     fields.add(new AjaxTextFieldPanel(
                             "field", "requiredAuthenticationContextClass",
                             new PropertyModel<>(clientAppTO, "requiredAuthenticationContextClass"), false));
@@ -513,15 +674,21 @@ public class ClientAppModalPanelBuilder<T extends ClientAppTO> extends AbstractM
                     requiredNameIdFormat.addRequiredLabel().setEnabled(true);
                     fields.add(requiredNameIdFormat);
 
-                    fields.add(new AjaxNumberFieldPanel.Builder<Integer>().min(0).build(
-                            "field", "skewAllowance", Integer.class,
-                            new PropertyModel<>(clientAppTO, "skewAllowance")));
+                    AjaxTextFieldPanel skewAllowance = new AjaxTextFieldPanel(
+                            "field", "skewAllowance", new PropertyModel<>(clientAppTO, "skewAllowance"), false);
+                    skewAllowance.addValidator(new DurationValidator());
+                    fields.add(skewAllowance);
+
+                    AjaxTextFieldPanel validityUntil = new AjaxTextFieldPanel(
+                            "field", "validityUntil", new PropertyModel<>(clientAppTO, "validityUntil"), false);
+                    validityUntil.addValidator(new DurationValidator());
+                    fields.add(validityUntil);
 
                     fields.add(new AjaxTextFieldPanel(
                             "field", "nameIdQualifier", new PropertyModel<>(clientAppTO, "nameIdQualifier"), false));
 
                     AjaxTextFieldPanel assertionAudience = new AjaxTextFieldPanel(
-                            "panel", "assertionAudience", new Model<>());
+                            "panel", "assertionAudience", Model.of());
                     assertionAudience.addValidator(new UrlValidator());
                     fields.add(new MultiFieldPanel.Builder<String>(
                             new PropertyModel<>(clientAppTO, "assertionAudiences")).build(

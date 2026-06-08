@@ -33,11 +33,13 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.core.GenericType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.syncope.client.lib.SyncopeClient;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.request.BooleanReplacePatchItem;
@@ -90,7 +92,8 @@ public class UserSelfITCase extends AbstractITCase {
 
     @Test
     public void selfRegistrationAllowed() {
-        assertTrue(ANONYMOUS_CLIENT.platform().isSelfRegAllowed());
+        assertTrue(confParamOps.get(
+                SyncopeConstants.MASTER_DOMAIN, StandardConfParams.SELF_REGISTRATION_ALLOWED, false, boolean.class));
     }
 
     @Test
@@ -323,7 +326,7 @@ public class UserSelfITCase extends AbstractITCase {
     @Test
     public void passwordReset() throws Exception {
         // 0. ensure that password request DOES require security question
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "passwordReset.securityQuestion", true);
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_RESET_SECURITY_QUESTION, true);
 
         // 1. create an user with security question and answer
         UserCR user = UserITCase.getUniqueSample("pwdReset@syncope.apache.org");
@@ -352,13 +355,7 @@ public class UserSelfITCase extends AbstractITCase {
         }
         ANONYMOUS_CLIENT.getService(UserSelfService.class).requestPasswordReset(user.getUsername(), "Rossi");
 
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         // 4. get token (normally sent via e-mail, now reading as admin)
         String email = user.getPlainAttr("email").orElseThrow().getValues().getFirst();
@@ -367,7 +364,7 @@ public class UserSelfITCase extends AbstractITCase {
         }
 
         String token = await().atMost(MAX_WAIT_SECONDS, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(
-                () -> USER_SERVICE.read(read.getKey()).getToken(),
+                () -> Optional.ofNullable(getToken(read.getKey()).get("token")).map(Object::toString).orElse(null),
                 StringUtils::isNotBlank);
 
         // 5. confirm password reset
@@ -385,8 +382,8 @@ public class UserSelfITCase extends AbstractITCase {
         }
 
         // 6. verify that password was reset and token removed
-        authClient = CLIENT_FACTORY.create(user.getUsername(), "newPassword123");
-        assertNull(authClient.self().user().getToken());
+        CLIENT_FACTORY.create(user.getUsername(), "newPassword123");
+        assertNull(Optional.ofNullable(getToken(read.getKey()).get("token")).map(Object::toString).orElse(null));
 
         // 7. verify that password was changed on external resource
         String newPwdOnResource = queryForObject(jdbcTemplate,
@@ -398,7 +395,7 @@ public class UserSelfITCase extends AbstractITCase {
     @Test
     public void passwordResetWithoutSecurityQuestion() {
         // 0. disable security question for password reset
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "passwordReset.securityQuestion", false);
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_RESET_SECURITY_QUESTION, false);
 
         // 1. create an user with security question and answer
         UserCR user = UserITCase.getUniqueSample("pwdResetNoSecurityQuestion@syncope.apache.org");
@@ -413,7 +410,7 @@ public class UserSelfITCase extends AbstractITCase {
         ANONYMOUS_CLIENT.getService(UserSelfService.class).requestPasswordReset(user.getUsername(), null);
 
         // 4. get token (normally sent via e-mail, now reading as admin)
-        String token = USER_SERVICE.read(read.getKey()).getToken();
+        String token = Optional.ofNullable(getToken(read.getKey()).get("token")).map(Object::toString).orElse(null);
         assertNotNull(token);
 
         // 5. confirm password reset
@@ -427,13 +424,11 @@ public class UserSelfITCase extends AbstractITCase {
         ANONYMOUS_CLIENT.getService(UserSelfService.class).confirmPasswordReset(token, "newPassword123");
 
         // 6. verify that password was reset and token removed
-        authClient = CLIENT_FACTORY.create(user.getUsername(), "newPassword123");
-        read = authClient.self().user();
-        assertNotNull(read);
-        assertNull(read.getToken());
+        CLIENT_FACTORY.create(user.getUsername(), "newPassword123");
+        assertNull(Optional.ofNullable(getToken(read.getKey()).get("token")).map(Object::toString).orElse(null));
 
         // 7. re-enable security question for password reset
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "passwordReset.securityQuestion", true);
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_RESET_SECURITY_QUESTION, true);
     }
 
     @Test

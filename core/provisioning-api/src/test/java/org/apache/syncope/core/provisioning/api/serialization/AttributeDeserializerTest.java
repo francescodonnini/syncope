@@ -19,14 +19,10 @@
 package org.apache.syncope.core.provisioning.api.serialization;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import org.apache.syncope.core.provisioning.api.AbstractTest;
 import org.identityconnectors.framework.common.objects.Attribute;
@@ -34,6 +30,10 @@ import org.identityconnectors.framework.common.objects.Name;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import tools.jackson.core.JsonParser;
+import tools.jackson.databind.DeserializationContext;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 public class AttributeDeserializerTest extends AbstractTest {
 
@@ -67,16 +67,17 @@ public class AttributeDeserializerTest extends AbstractTest {
 
     @Test
     public void deserializeIsNull() throws IOException {
-        when(node2.asText()).thenReturn(name);
+        when(node2.asString()).thenReturn(name);
         when(node.isNull()).thenReturn(Boolean.TRUE);
         Attribute attr = deserializer.deserialize(jp, ct);
         assertEquals(name, attr.getName());
-        assertEquals(Collections.singletonList(null), attr.getValue());
+        assertEquals(1, attr.getValue().size());
+        assertNull(attr.getValue().getFirst());
     }
 
     @Test
     public void deserializeIsBoolean() throws IOException {
-        when(node2.asText()).thenReturn(name);
+        when(node2.asString()).thenReturn(name);
         when(node.isBoolean()).thenReturn(Boolean.TRUE);
         when(node.asBoolean()).thenReturn(Boolean.TRUE);
         Attribute attr = deserializer.deserialize(jp, ct);
@@ -88,7 +89,7 @@ public class AttributeDeserializerTest extends AbstractTest {
     public void deserializeIsDouble() throws IOException {
         Double number = 9000.1;
         name = "__TEST__";
-        when(node2.asText()).thenReturn(name);
+        when(node2.asString()).thenReturn(name);
         when(node.isDouble()).thenReturn(Boolean.TRUE);
         when(node.asDouble()).thenReturn(number);
         Attribute attr = deserializer.deserialize(jp, ct);
@@ -100,7 +101,7 @@ public class AttributeDeserializerTest extends AbstractTest {
     public void deserializeIsLong() throws IOException {
         Long number = 9000L;
         name = "__UID__";
-        when(node2.asText()).thenReturn(name);
+        when(node2.asString()).thenReturn(name);
         when(node.isLong()).thenReturn(Boolean.TRUE);
         when(node.asLong()).thenReturn(number);
         Attribute attr = deserializer.deserialize(jp, ct);
@@ -111,7 +112,7 @@ public class AttributeDeserializerTest extends AbstractTest {
     @Test
     public void deserializeIsInt() throws IOException {
         Integer number = 9000;
-        when(node2.asText()).thenReturn(name);
+        when(node2.asString()).thenReturn(name);
         when(node.isInt()).thenReturn(Boolean.TRUE);
         when(node.asInt()).thenReturn(number);
         Attribute attr = deserializer.deserialize(jp, ct);
@@ -122,8 +123,8 @@ public class AttributeDeserializerTest extends AbstractTest {
     @Test
     public void deserializeIsText() throws IOException {
         String text = "<binary>test";
-        when(node2.asText()).thenReturn(name);
-        when(node.asText()).thenReturn(text);
+        when(node2.asString()).thenReturn(name);
+        when(node.asString()).thenReturn(text);
         Attribute attr = deserializer.deserialize(jp, ct);
         assertEquals(attr.getName(), name);
         assertEquals(List.of(text).getFirst(), attr.getValue().getFirst());

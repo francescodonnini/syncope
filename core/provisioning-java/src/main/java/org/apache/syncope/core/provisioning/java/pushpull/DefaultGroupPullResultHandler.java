@@ -18,43 +18,32 @@
  */
 package org.apache.syncope.core.provisioning.java.pushpull;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import org.apache.syncope.common.lib.request.AnyCR;
 import org.apache.syncope.common.lib.request.AnyUR;
-import org.apache.syncope.common.lib.request.AttrPatch;
 import org.apache.syncope.common.lib.request.GroupCR;
 import org.apache.syncope.common.lib.request.GroupUR;
 import org.apache.syncope.common.lib.to.AnyTO;
 import org.apache.syncope.common.lib.to.GroupTO;
 import org.apache.syncope.common.lib.to.ProvisioningReport;
 import org.apache.syncope.common.lib.types.AnyTypeKind;
-import org.apache.syncope.common.lib.types.PatchOperation;
 import org.apache.syncope.core.persistence.api.entity.Any;
 import org.apache.syncope.core.persistence.api.entity.AnyUtils;
 import org.apache.syncope.core.persistence.api.entity.group.Group;
 import org.apache.syncope.core.provisioning.api.GroupProvisioningManager;
 import org.apache.syncope.core.provisioning.api.ProvisioningManager;
 import org.apache.syncope.core.provisioning.api.WorkflowResult;
-import org.apache.syncope.core.provisioning.api.pushpull.GroupPullResultHandler;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPullResultHandler;
 import org.identityconnectors.framework.common.objects.SyncDelta;
 import org.springframework.beans.factory.annotation.Autowired;
 
-public class DefaultGroupPullResultHandler extends AbstractPullResultHandler implements GroupPullResultHandler {
+public class DefaultGroupPullResultHandler extends AbstractPullResultHandler implements AnyPullResultHandler {
 
     @Autowired
     private GroupProvisioningManager groupProvisioningManager;
 
-    private final Map<String, String> groupOwnerMap = new HashMap<>();
-
     @Override
-    public Map<String, String> getGroupOwnerMap() {
-        return this.groupOwnerMap;
-    }
-
-    @Override
-    protected AnyUtils getAnyUtils() {
+    protected AnyUtils anyUtils() {
         return anyUtilsFactory.getInstance(AnyTypeKind.GROUP);
     }
 
@@ -69,7 +58,7 @@ public class DefaultGroupPullResultHandler extends AbstractPullResultHandler imp
     }
 
     @Override
-    protected ProvisioningManager<?, ?> getProvisioningManager() {
+    protected ProvisioningManager<?, ?> provisioningManager() {
         return groupProvisioningManager;
     }
 
@@ -85,11 +74,8 @@ public class DefaultGroupPullResultHandler extends AbstractPullResultHandler imp
 
     @Override
     protected AnyTO doCreate(final AnyCR anyCR, final SyncDelta delta) {
-        GroupCR groupCR = GroupCR.class.cast(anyCR);
-
         ProvisioningManager.ProvisioningResult<String> created = groupProvisioningManager.create(
-                groupCR,
-                groupOwnerMap,
+                GroupCR.class.cast(anyCR),
                 Set.of(profile.getTask().getResource().getKey()),
                 true,
                 profile.getExecutor(),
@@ -105,10 +91,8 @@ public class DefaultGroupPullResultHandler extends AbstractPullResultHandler imp
             final SyncDelta delta,
             final ProvisioningReport result) {
 
-        GroupUR groupUR = GroupUR.class.cast(req);
-
         ProvisioningManager.ProvisioningResult<GroupUR> updated = groupProvisioningManager.update(
-                groupUR,
+                GroupUR.class.cast(req),
                 Set.of(profile.getTask().getResource().getKey()),
                 true,
                 profile.getExecutor(),
@@ -116,18 +100,6 @@ public class DefaultGroupPullResultHandler extends AbstractPullResultHandler imp
 
         createRemediationIfNeeded(req, delta, result);
 
-        String groupOwner = null;
-        for (AttrPatch attrPatch : groupUR.getPlainAttrs()) {
-            if (attrPatch.getOperation() == PatchOperation.ADD_REPLACE && attrPatch.getAttr() != null
-                    && attrPatch.getAttr().getSchema().isEmpty() && !attrPatch.getAttr().getValues().isEmpty()) {
-
-                groupOwner = attrPatch.getAttr().getValues().getFirst();
-            }
-        }
-        if (groupOwner != null) {
-            groupOwnerMap.put(updated.key().getKey(), groupOwner);
-        }
-
-        return req;
+        return updated.key();
     }
 }

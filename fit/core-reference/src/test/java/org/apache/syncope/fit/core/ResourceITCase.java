@@ -95,7 +95,7 @@ public class ResourceITCase extends AbstractITCase {
     @Test
     public void getPropagationActionsClasses() {
         Set<String> actions = ANONYMOUS_CLIENT.platform().
-                getJavaImplInfo(IdMImplementationType.PROPAGATION_ACTIONS).orElseThrow().getClasses();
+                getJavaImplInfo(IdMImplementationType.PROPAGATION_ACTIONS).orElseThrow().classes();
         assertNotNull(actions);
         assertFalse(actions.isEmpty());
     }
@@ -597,7 +597,7 @@ public class ResourceITCase extends AbstractITCase {
         mapping.setConnObjectKeyItem(item);
 
         item = new Item();
-        item.setIntAttrName("userOwner");
+        item.setIntAttrName("uManager");
         item.setExtAttrName("owner");
         item.setPurpose(MappingPurpose.BOTH);
         mapping.add(item);

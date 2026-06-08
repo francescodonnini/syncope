@@ -33,7 +33,7 @@ import org.apache.syncope.client.console.panels.SessionExpirationModalPanel;
 import org.apache.syncope.client.console.rest.SyncopeRestClient;
 import org.apache.syncope.client.console.wicket.markup.head.MetaHeaderItem;
 import org.apache.syncope.client.console.wicket.markup.html.bootstrap.dialog.BaseModal;
-import org.apache.syncope.client.console.wicket.ws.RefreshWebSocketBehavior;
+import org.apache.syncope.client.console.wicket.ws.BasePageWebSocketBehavior;
 import org.apache.syncope.client.console.widgets.ExtAlertWidget;
 import org.apache.syncope.client.ui.commons.Constants;
 import org.apache.syncope.client.ui.commons.annotations.AMPage;
@@ -92,6 +92,8 @@ public class BasePage extends BaseWebPage {
 
     protected final BaseModal<Serializable> sessionExpiration = new BaseModal<>("sessionExpirationModal");
 
+    protected final BasePageWebSocketBehavior webSocketBehavior = new BasePageWebSocketBehavior();
+
     public BasePage() {
         this(null);
     }
@@ -119,9 +121,11 @@ public class BasePage extends BaseWebPage {
         sessionExpiration.setWindowClosedCallback(target -> sessionExpiration.show(false));
         body.add(sessionExpiration);
 
-        add(new RefreshWebSocketBehavior() {
+        add(webSocketBehavior);
+        webSocketBehavior.add(new BasePageWebSocketBehavior.OnTimerChild(
+                SyncopeWebApplication.get().getJwtExpirationMinutesThreshold() - 1, TimeUnit.MINUTES) {
 
-            private static final long serialVersionUID = 8165980028271428241L;
+            private static final long serialVersionUID = 532119924423529449L;
 
             @Override
             protected void onTimer(final WebSocketRequestHandler handler) {
@@ -133,7 +137,7 @@ public class BasePage extends BaseWebPage {
                     handler.add(sessionExpiration);
                 }
             }
-        }.schedule(SyncopeWebApplication.get().getJwtExpirationMinutesThreshold() - 1, TimeUnit.MINUTES));
+        });
 
         Serializable leftMenuCollapse = SyncopeConsoleSession.get().getAttribute(Constants.MENU_COLLAPSE);
         if ((leftMenuCollapse instanceof final Boolean b) && b) {
@@ -153,19 +157,29 @@ public class BasePage extends BaseWebPage {
         body.add(liContainer);
         liContainer.add(BookmarkablePageLinkBuilder.build("dashboard", Dashboard.class));
 
+        WebMarkupContainer directoryLIContainer = new WebMarkupContainer(getLIContainerId("directory"));
+        body.add(directoryLIContainer);
+        WebMarkupContainer directoryULContainer = new WebMarkupContainer(getULContainerId("directory"));
+        directoryLIContainer.add(directoryULContainer);
+
         liContainer = new WebMarkupContainer(getLIContainerId("realms"));
-        body.add(liContainer);
-
-        BookmarkablePageLink<? extends BasePage> link = BookmarkablePageLinkBuilder.build("realms", Realms.class);
+        directoryULContainer.add(liContainer);
+        BookmarkablePageLink<? extends BasePage> link =
+                BookmarkablePageLinkBuilder.build("realms", Realms.class);
         MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER, IdRepoEntitlement.REALM_SEARCH);
+        liContainer.add(link);
 
+        liContainer = new WebMarkupContainer(getLIContainerId("anys"));
+        directoryULContainer.add(liContainer);
+        link = BookmarkablePageLinkBuilder.build("anys", Anys.class);
+        MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER, IdRepoEntitlement.REALM_SEARCH);
         liContainer.add(link);
 
         liContainer = new WebMarkupContainer(getLIContainerId("engagements"));
         body.add(liContainer);
         link = BookmarkablePageLinkBuilder.build("engagements", Engagements.class);
         MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER,
-                String.format("%s,%s", IdRepoEntitlement.TASK_LIST, IdRepoEntitlement.IMPLEMENTATION_LIST));
+                "%s,%s".formatted(IdRepoEntitlement.TASK_LIST, IdRepoEntitlement.IMPLEMENTATION_LIST));
         liContainer.add(link);
 
         liContainer = new WebMarkupContainer(getLIContainerId("reports"));
@@ -187,7 +201,7 @@ public class BasePage extends BaseWebPage {
                 IdMPage ann = item.getModelObject().getAnnotation(IdMPage.class);
 
                 BookmarkablePageLink<Page> link = new BookmarkablePageLink<>("idmPage", item.getModelObject());
-                link.add(new Label("idmPageLabel", ann.label()));
+                link.add(new Label("idmPageLabel", getString("menu." + ann.label(), null, ann.label())));
                 if (StringUtils.isNotBlank(ann.listEntitlement())) {
                     MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER, ann.listEntitlement());
                 }
@@ -226,7 +240,8 @@ public class BasePage extends BaseWebPage {
                 AMPage ann = item.getModelObject().getAnnotation(AMPage.class);
 
                 BookmarkablePageLink<Page> link = new BookmarkablePageLink<>("amPage", item.getModelObject());
-                link.add(new Label("amPageLabel", ann.label()));
+                link.add(new Label("amPageLabel", getString("menu." + ann.label(), null, ann.label())));
+
                 if (StringUtils.isNotBlank(ann.listEntitlement())) {
                     MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER, ann.listEntitlement());
                 }
@@ -400,17 +415,22 @@ public class BasePage extends BaseWebPage {
         // 1. check if current class is set to top-level menu
         WebMarkupContainer containingLI = (WebMarkupContainer) body.get(
                 getLIContainerId(getClass().getSimpleName().toLowerCase()));
-        // 2. if not, check if it is under 'Keymaster'
+        // 2. if not, check if it is under 'Directory'
+        if (containingLI == null) {
+            containingLI = (WebMarkupContainer) directoryULContainer.get(
+                    getLIContainerId(getClass().getSimpleName().toLowerCase()));
+        }
+        // 3. if not, check if it is under 'Keymaster'
         if (containingLI == null) {
             containingLI = (WebMarkupContainer) keymasterULContainer.get(
                     getLIContainerId(getClass().getSimpleName().toLowerCase()));
         }
-        // 3. if not, check if it is under 'Configuration'
+        // 4. if not, check if it is under 'Configuration'
         if (containingLI == null) {
             containingLI = (WebMarkupContainer) confULContainer.get(
                     getLIContainerId(getClass().getSimpleName().toLowerCase()));
         }
-        // 4. when found, set CSS coordinates for menu
+        // 5. when found, set CSS coordinates for menu
         if (containingLI != null) {
             StreamSupport.stream(containingLI.spliterator(), false).filter(Link.class::isInstance).
                     forEach(child -> child.add(new Behavior() {
@@ -423,7 +443,33 @@ public class BasePage extends BaseWebPage {
                 }
             }));
 
-            if (keymasterULContainer.getId().equals(containingLI.getParent().getId())) {
+            if (directoryULContainer.getId().equals(containingLI.getParent().getId())) {
+                directoryULContainer.add(new Behavior() {
+
+                    private static final long serialVersionUID = -5775607340182293596L;
+
+                    @Override
+                    public void renderHead(final Component component, final IHeaderResponse response) {
+                        response.render(OnDomReadyHeaderItem.forScript("$('#domainLink').addClass('active')"));
+                    }
+
+                    @Override
+                    public void onComponentTag(final Component component, final ComponentTag tag) {
+                        tag.put("class", "nav nav-treeview");
+                        tag.put("style", "display: block;");
+                    }
+                });
+
+                directoryLIContainer.add(new Behavior() {
+
+                    private static final long serialVersionUID = -5775607340182293596L;
+
+                    @Override
+                    public void onComponentTag(final Component component, final ComponentTag tag) {
+                        tag.put("class", "nav-item has-treeview menu-open");
+                    }
+                });
+            } else if (keymasterULContainer.getId().equals(containingLI.getParent().getId())) {
                 keymasterULContainer.add(new Behavior() {
 
                     private static final long serialVersionUID = -5775607340182293596L;
@@ -521,7 +567,7 @@ public class BasePage extends BaseWebPage {
                 ExtPage ann = item.getModelObject().getAnnotation(ExtPage.class);
 
                 BookmarkablePageLink<Page> link = new BookmarkablePageLink<>("extPage", item.getModelObject());
-                link.add(new Label("extPageLabel", ann.label()));
+                link.add(new Label("extPageLabel", getString("menu." + ann.label(), null, ann.label())));
                 if (StringUtils.isNotBlank(ann.listEntitlement())) {
                     MetaDataRoleAuthorizationStrategy.authorize(link, WebPage.RENDER, ann.listEntitlement());
                 }

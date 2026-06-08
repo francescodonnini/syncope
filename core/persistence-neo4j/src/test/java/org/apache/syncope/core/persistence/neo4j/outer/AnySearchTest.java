@@ -30,22 +30,20 @@ import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.types.AnyTypeKind;
 import org.apache.syncope.common.lib.types.ClientExceptionType;
-import org.apache.syncope.common.lib.types.IdRepoEntitlement;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnySearchDAO;
+import org.apache.syncope.core.persistence.api.dao.DerSchemaDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmSearchDAO;
-import org.apache.syncope.core.persistence.api.dao.RoleDAO;
 import org.apache.syncope.core.persistence.api.dao.UserDAO;
 import org.apache.syncope.core.persistence.api.dao.search.AnyCond;
 import org.apache.syncope.core.persistence.api.dao.search.AnyTypeCond;
 import org.apache.syncope.core.persistence.api.dao.search.AttrCond;
-import org.apache.syncope.core.persistence.api.dao.search.RoleCond;
 import org.apache.syncope.core.persistence.api.dao.search.SearchCond;
+import org.apache.syncope.core.persistence.api.entity.DerSchema;
 import org.apache.syncope.core.persistence.api.entity.PlainAttr;
-import org.apache.syncope.core.persistence.api.entity.Role;
 import org.apache.syncope.core.persistence.api.entity.anyobject.AMembership;
 import org.apache.syncope.core.persistence.api.entity.anyobject.AnyObject;
 import org.apache.syncope.core.persistence.api.entity.group.Group;
@@ -81,34 +79,10 @@ public class AnySearchTest extends AbstractTest {
     private RealmSearchDAO realmSearchDAO;
 
     @Autowired
-    private RoleDAO roleDAO;
+    private DerSchemaDAO derSchemaDAO;
 
     @Autowired
     private PlainAttrValidationManager validator;
-
-    @Test
-    public void searchByDynMembership() {
-        // 1. create role with dynamic membership
-        Role role = entityFactory.newEntity(Role.class);
-        role.setKey("new");
-        role.add(realmDAO.getRoot());
-        role.add(realmSearchDAO.findByFullPath("/even/two").orElseThrow());
-        role.getEntitlements().add(IdRepoEntitlement.AUDIT_LIST);
-        role.getEntitlements().add(IdRepoEntitlement.AUDIT_SET);
-        role.setDynMembershipCond("cool==true");
-
-        role = roleDAO.saveAndRefreshDynMemberships(role);
-        assertNotNull(role);
-
-        // 2. search user by this dynamic role
-        RoleCond roleCond = new RoleCond();
-        roleCond.setRole(role.getKey());
-
-        List<User> users = searchDAO.search(SearchCond.of(roleCond), AnyTypeKind.USER);
-        assertNotNull(users);
-        assertEquals(1, users.size());
-        assertEquals("c9b2dec2-00a7-4855-97c0-d854842b4b24", users.getFirst().getKey());
-    }
 
     @Test
     public void searchAsGroupOwner() {
@@ -139,7 +113,8 @@ public class AnySearchTest extends AbstractTest {
         // 3. search all users with director owner's entitlements: only rossini is returned
         users = searchDAO.search(
                 group.getRealm(), true,
-                Set.of(new RealmUtils.GroupOwnerRealm(group.getRealm().getFullPath(), group.getKey()).output()),
+                Set.of(new RealmUtils.ManagerRealm(
+                        group.getRealm().getFullPath(), AnyTypeKind.GROUP, group.getKey()).output()),
                 SearchCond.of(anyCond), PageRequest.of(0, 100), AnyTypeKind.USER);
         assertNotNull(users);
         assertEquals(1, users.size());
@@ -210,6 +185,41 @@ public class AnySearchTest extends AbstractTest {
         assertEquals(1, users.size());
 
         assertEquals("c9b2dec2-00a7-4855-97c0-d854842b4b24", users.getFirst().getKey());
+    }
+
+    @Test
+    public void issueSYNCOPE800() {
+        // create derived attribute (literal as prefix)
+        DerSchema prefix = entityFactory.newEntity(DerSchema.class);
+        prefix.setKey("kprefix");
+        prefix.setExpression("'k' + firstname");
+
+        derSchemaDAO.save(prefix);
+
+        // create derived attribute (literal as suffix)
+        DerSchema suffix = entityFactory.newEntity(DerSchema.class);
+        suffix.setKey("ksuffix");
+        suffix.setExpression("firstname + 'k'");
+
+        derSchemaDAO.save(suffix);
+
+        // add derived attributes to user
+        User owner = userDAO.findByUsername("vivaldi").orElseThrow();
+
+        String firstname = owner.getPlainAttr("firstname").get().getValuesAsStrings().getFirst();
+        assertNotNull(firstname);
+
+        // search by ksuffix derived attribute
+        List<User> list = searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("ksuffix").orElseThrow().getExpression(),
+                firstname + 'k', false, AnyTypeKind.USER);
+        assertEquals(1, list.size());
+
+        // search by kprefix derived attribute
+        list = searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("kprefix").orElseThrow().getExpression(),
+                'k' + firstname, false, AnyTypeKind.USER);
+        assertEquals(1, list.size());
     }
 
     @Test

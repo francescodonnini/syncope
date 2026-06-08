@@ -32,6 +32,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.types.ClientExceptionType;
 import org.apache.syncope.common.lib.types.EntityViolationType;
+import org.apache.syncope.common.rest.api.RESTHeaders;
 import org.apache.syncope.core.persistence.api.attrvalue.InvalidEntityException;
 import org.apache.syncope.core.persistence.api.attrvalue.ParsingValidationException;
 import org.apache.syncope.core.persistence.api.dao.DuplicateException;
@@ -48,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.transaction.TransactionSystemException;
 
 @Provider
@@ -90,8 +92,13 @@ public class SCIMExceptionMapper implements ExceptionMapper<Exception> {
                 || ex instanceof ForbiddenException
                 || ex instanceof NotAuthorizedException) {
 
-            // leaves the default exception processing
-            builder = null;
+            if (ex instanceof AuthorizationDeniedException ade) {
+                builder = Response.status(Response.Status.FORBIDDEN).
+                        header(RESTHeaders.ERROR_INFO, ade.getMessage());
+            } else {
+                // leaves the default exception processing to Spring Security
+                builder = null;
+            }
         } else if (ex instanceof NotFoundException) {
             return Response.status(Response.Status.NOT_FOUND).entity(new SCIMError(null,
                     Response.Status.NOT_FOUND.getStatusCode(), ExceptionUtils.getRootCauseMessage(ex))).
@@ -102,10 +109,10 @@ public class SCIMExceptionMapper implements ExceptionMapper<Exception> {
                 || ExceptionUtils.getRootCause(ex) instanceof DelegatedAdministrationException) {
 
             builder = builder(ClientExceptionType.DelegatedAdministration, ExceptionUtils.getRootCauseMessage(ex));
-        } else if (ENTITYEXISTS_EXCLASS.isAssignableFrom(ex.getClass())
-                || ex instanceof DuplicateException
-                || PERSISTENCE_EXCLASS.isAssignableFrom(ex.getClass())
-                && ENTITYEXISTS_EXCLASS.isAssignableFrom(ex.getCause().getClass())) {
+        } else if (ENTITYEXISTS_EXCLASS.isAssignableFrom(ex.getClass()) || ex instanceof DuplicateException
+                || (ex.getCause() != null && ENTITYEXISTS_EXCLASS.isAssignableFrom(ex.getCause().getClass()))
+                || ex.getMessage().contains("already exists")
+                || ex.getMessage().contains("UNIQUE") || ex.getMessage().contains("Duplicate")) {
 
             builder = builder(ClientExceptionType.EntityExists, ExceptionUtils.getRootCauseMessage(ex));
         } else if (ex instanceof DataIntegrityViolationException || JPASYSTEM_EXCLASS.isAssignableFrom(ex.getClass())) {
@@ -208,7 +215,7 @@ public class SCIMExceptionMapper implements ExceptionMapper<Exception> {
         ErrorType scimType = null;
         if (hType.name().startsWith("Invalid") || hType == ClientExceptionType.RESTValidation) {
             scimType = ErrorType.invalidValue;
-        } else if (hType == ClientExceptionType.EntityExists) {
+        } else if (hType == ClientExceptionType.EntityExists || hType == ClientExceptionType.DataIntegrityViolation) {
             scimType = ErrorType.uniqueness;
         }
 

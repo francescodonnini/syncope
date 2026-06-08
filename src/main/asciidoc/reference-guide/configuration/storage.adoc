@@ -1,0 +1,227 @@
+//
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+//
+=== Internal Storage
+
+==== PostgreSQL
+
+[NOTE]
+Apache Syncope {docVersion} is verified with PostgreSQL server >= {postgresql} and JDBC driver >= {postgresqlJDBC}.
+
+Create
+
+[source]
+....
+persistence.domain[0].key=Master
+persistence.domain[0].jdbcDriver=org.postgresql.Driver
+persistence.domain[0].jdbcURL=jdbc:postgresql://localhost:5432/syncope?stringtype=unspecified
+persistence.domain[0].dbUsername=syncope
+persistence.domain[0].dbPassword=syncope
+persistence.domain[0].databasePlatform=org.apache.syncope.core.persistence.jpa.hibernate.SyncopePostgreSQLDialect
+persistence.domain[0].poolMaxActive=20
+persistence.domain[0].poolMinIdle=5
+....
+
+as `core/src/main/resources/core-postgresql.properties`.
+
+Do not forget to include `postgresql` as
+https://docs.spring.io/spring-boot/4.0/reference/features/profiles.html#features.profiles.adding-active-profiles[Spring Boot profile^]
+for the Core application.
+
+[WARNING]
+This assumes that you have a PostgreSQL instance running on localhost, listening on its default port 5432 with a
+database `syncope` fully accessible by user `syncope` with password `syncope`.
+
+==== MySQL
+
+[NOTE]
+Apache Syncope {docVersion} is verified with MySQL server >= {mysql} and JDBC driver >= {mysqlJDBC}.
+
+Create
+
+[source]
+....
+persistence.indexesXML=classpath:META-INF/mysql/indexes.xml
+persistence.viewsXML=classpath:META-INF/mysql/views.xml
+
+persistence.domain[0].key=Master
+persistence.domain[0].jdbcDriver=com.mysql.cj.jdbc.Driver
+persistence.domain[0].jdbcURL=jdbc:mysql://localhost:3306/syncope?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+persistence.domain[0].dbUsername=syncope
+persistence.domain[0].dbPassword=syncope
+persistence.domain[0].databasePlatform=org.hibernate.dialect.MySQLDialect
+persistence.domain[0].orm=META-INF/mysql/spring-orm.xml
+persistence.domain[0].poolMaxActive=20
+persistence.domain[0].poolMinIdle=5
+....
+
+as `core/src/main/resources/core-mysql.properties`.
+
+Do not forget to include `mysql` as 
+https://docs.spring.io/spring-boot/4.0/reference/features/profiles.html#features.profiles.adding-active-profiles[Spring Boot profile^]
+for the Core application.
+
+[CAUTION]
+It is important to set the collation to `utf8_general_ci` after creation of `syncope` database.
+
+[WARNING]
+This assumes that you have a MySQL instance running on localhost, listening on its default port 3306 with a database
+`syncope` fully accessible by user `syncope` with password `syncope`.
+
+==== MariaDB
+
+[NOTE]
+Apache Syncope {docVersion} is verified with MariaDB server >= {mariadb} and JDBC driver >= {mariadbJDBC}.
+
+Create
+
+[source]
+....
+persistence.indexesXML=classpath:META-INF/mariadb/indexes.xml
+persistence.viewsXML=classpath:META-INF/mariadb/views.xml
+
+persistence.domain[0].key=Master
+persistence.domain[0].jdbcDriver=org.mariadb.jdbc.Driver
+persistence.domain[0].jdbcURL=jdbc:mariadb://localhost:3306/syncope?characterEncoding=UTF-8
+persistence.domain[0].dbUsername=syncope
+persistence.domain[0].dbPassword=syncope
+persistence.domain[0].databasePlatform=org.hibernate.dialect.MariaDBDialect
+persistence.domain[0].orm=META-INF/mariadb/spring-orm.xml
+persistence.domain[0].poolMaxActive=20
+persistence.domain[0].poolMinIdle=5
+....
+
+as `core/src/main/resources/core-mariadb.properties`.
+
+Do not forget to include `mariadb` as 
+https://docs.spring.io/spring-boot/4.0/reference/features/profiles.html#features.profiles.adding-active-profiles[Spring Boot profile^]
+for the Core application.
+
+[CAUTION]
+It is important to set the collation to `utf8_general_ci` after creation of `syncope` database.
+
+[WARNING]
+====
+It is necessary to use `utf8mb4_unicode_ci` instead of `utf8mb4_general_ci` if case-sensitive queries are required.
+In this case, set
+....
+init_connect = "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+....
+under either the `[mysqld]` section or the `[mariadb]` section of your
+https://mariadb.com/kb/en/configuring-mariadb-with-option-files/[option file^].
+====
+
+[WARNING]
+This assumes that you have a MariaDB instance running on localhost, listening on its default port 3306 with a database
+`syncope` fully accessible by user `syncope` with password `syncope`.
+
+==== Oracle Database
+
+[NOTE]
+Apache Syncope {docVersion} is verified with Oracle database >= {oracle} and JDBC driver >= ojdbc11 {oracleJDBC}.
+
+Create
+
+[source]
+....
+persistence.indexesXML=classpath:META-INF/oracle/indexes.xml
+persistence.viewsXML=classpath:META-INF/oracle/views.xml
+
+persistence.domain[0].key=Master
+persistence.domain[0].jdbcDriver=oracle.jdbc.OracleDriver
+persistence.domain[0].jdbcURL=jdbc:oracle:thin:@localhost}:1521/FREEPDB1
+persistence.domain[0].dbSchema=SYNCOPE
+persistence.domain[0].dbUsername=syncope
+persistence.domain[0].dbPassword=syncope
+persistence.domain[0].databasePlatform=org.hibernate.dialect.OracleDialect
+persistence.domain[0].orm=META-INF/oracle/spring-orm.xml
+persistence.domain[0].poolMaxActive=20
+persistence.domain[0].poolMinIdle=5
+....
+
+as `core/src/main/resources/core-oracle.properties`.
+
+Do not forget to include `oracle` as 
+https://docs.spring.io/spring-boot/4.0/reference/features/profiles.html#features.profiles.adding-active-profiles[Spring Boot profile^]
+for the Core application.
+
+[WARNING]
+This assumes that you have an Oracle instance running on localhost, listening on its default port 1521 with a database
+`syncope` under tablespace `SYNCOPE`, fully accessible by user `syncope` with password `syncope`.
+
+==== Neo4j
+
+[NOTE]
+Apache Syncope {docVersion} is verified with Neo4j Graph Database >= {neo4j}).
+
+[WARNING]
+While completely functional, the code is not considered stable for production environments.
+
+Replace
+
+[source,xml]
+....
+    <dependency>
+      <groupId>org.apache.syncope.core</groupId>
+      <artifactId>syncope-core-starter</artifactId>
+    </dependency>
+....
+
+with
+
+[source,xml]
+....
+    <dependency>
+      <groupId>org.apache.syncope.core</groupId>
+      <artifactId>syncope-core-starter</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.syncope.core</groupId>
+          <artifactId>syncope-core-persistence-jpa</artifactId>          
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.syncope.core</groupId>
+      <artifactId>syncope-core-persistence-neo4j</artifactId>
+      <version>${syncope.version}</version>
+    </dependency>
+....
+
+in `core/pom.xml`.
+
+Create
+
+[source]
+....
+persistence.domain[0].key=Master
+persistence.domain[0].uri=bolt://localhost:7687/
+persistence.domain[0].username=neo4j
+persistence.domain[0].password=null
+persistence.domain[0].maxConnectionPoolSize=100
+....
+
+as `core/src/main/resources/core-neo4j.properties`.
+
+Do not forget to include `neo4j` as 
+https://docs.spring.io/spring-boot/3.5/reference/features/profiles.html#features.profiles.adding-active-profiles[Spring Boot profile^]
+for the Core application.
+
+[WARNING]
+This assumes that you have a Neo4j instance running on localhost, listening on its default port 7687,
+fully accessible by user `neo4j` with no password set.

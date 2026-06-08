@@ -19,14 +19,12 @@
 package org.apache.syncope.core.persistence.jpa.dao;
 
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import org.apache.syncope.common.lib.types.AttrSchemaType;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
-import org.apache.syncope.core.persistence.api.dao.DynRealmDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.PlainSchemaDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmSearchDAO;
@@ -44,7 +42,6 @@ public class MySQLJPAAnySearchDAO extends AbstractJPAAnySearchDAO {
 
     public MySQLJPAAnySearchDAO(
             final RealmSearchDAO realmSearchDAO,
-            final DynRealmDAO dynRealmDAO,
             final UserDAO userDAO,
             final GroupDAO groupDAO,
             final AnyObjectDAO anyObjectDAO,
@@ -52,12 +49,10 @@ public class MySQLJPAAnySearchDAO extends AbstractJPAAnySearchDAO {
             final EntityFactory entityFactory,
             final AnyUtilsFactory anyUtilsFactory,
             final PlainAttrValidationManager validator,
-            final EntityManagerFactory entityManagerFactory,
             final EntityManager entityManager) {
 
         super(
                 realmSearchDAO,
-                dynRealmDAO,
                 userDAO,
                 groupDAO,
                 anyObjectDAO,
@@ -65,7 +60,6 @@ public class MySQLJPAAnySearchDAO extends AbstractJPAAnySearchDAO {
                 entityFactory,
                 anyUtilsFactory,
                 validator,
-                entityManagerFactory,
                 entityManager);
     }
 

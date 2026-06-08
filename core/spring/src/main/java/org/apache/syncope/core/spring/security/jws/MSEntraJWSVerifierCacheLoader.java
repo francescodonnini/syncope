@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.spring.security.jws;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.ECDSAVerifier;
@@ -44,6 +43,8 @@ import javax.cache.integration.CacheLoader;
 import javax.cache.integration.CacheLoaderException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 public class MSEntraJWSVerifierCacheLoader implements CacheLoader<String, JWSVerifier> {
 
@@ -61,16 +62,15 @@ public class MSEntraJWSVerifierCacheLoader implements CacheLoader<String, JWSVer
     }
 
     protected String getOpenIDMetadataDocumentUrl() {
-        return String.format(
-                "https://login.microsoftonline.com/%s/.well-known/openid-configuration%s",
+        return "https://login.microsoftonline.com/%s/.well-known/openid-configuration%s".formatted(
                 Optional.ofNullable(tenantId).orElse("common"),
-                Optional.ofNullable(appId).map(i -> String.format("?appid=%s", i)).orElse(""));
+                Optional.ofNullable(appId).map(i -> "?appid=%s".formatted(i)).orElse(""));
     }
 
     protected String extractJwksUri(final String openIdMetadataDocument) {
         try {
-            return MAPPER.readTree(openIdMetadataDocument).get("jwks_uri").asText();
-        } catch (IOException e) {
+            return MAPPER.readTree(openIdMetadataDocument).get("jwks_uri").asString();
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Extracting value of 'jwks_url' key from OpenID Metadata JSON "
                     + "document for Microsoft Entra failed:", e);
         }
@@ -83,13 +83,12 @@ public class MSEntraJWSVerifierCacheLoader implements CacheLoader<String, JWSVer
                     HttpRequest.newBuilder().uri(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
-                throw new IllegalStateException(
-                        String.format("Received HTTP status code %d", response.statusCode()));
+                throw new IllegalStateException("Received HTTP status code %d".formatted(response.statusCode()));
             }
             return response.body();
         } catch (IOException | InterruptedException | IllegalStateException e) {
             throw new IllegalStateException(
-                    String.format("Fetching JSON document for Microsoft Entra from '%s' failed:", url), e);
+                    "Fetching JSON document for Microsoft Entra from '%s' failed:".formatted(url), e);
         }
     }
 

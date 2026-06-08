@@ -32,7 +32,6 @@ import java.util.Set;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.request.GroupCR;
-import org.apache.syncope.common.lib.request.GroupUR;
 import org.apache.syncope.common.lib.to.AnyTypeClassTO;
 import org.apache.syncope.common.lib.to.ExecTO;
 import org.apache.syncope.common.lib.to.GroupTO;
@@ -48,7 +47,6 @@ import org.apache.syncope.common.lib.to.ReconStatus;
 import org.apache.syncope.common.lib.to.ResourceTO;
 import org.apache.syncope.common.lib.types.AnyTypeKind;
 import org.apache.syncope.common.lib.types.AttrSchemaType;
-import org.apache.syncope.common.lib.types.ExecStatus;
 import org.apache.syncope.common.lib.types.IdMImplementationType;
 import org.apache.syncope.common.lib.types.MappingPurpose;
 import org.apache.syncope.common.lib.types.MatchingRule;
@@ -72,7 +70,7 @@ public class PushTaskITCase extends AbstractTaskITCase {
     @Test
     public void getPushActionsClasses() {
         Set<String> actions = ANONYMOUS_CLIENT.platform().
-                getJavaImplInfo(IdMImplementationType.PUSH_ACTIONS).orElseThrow().getClasses();
+                getJavaImplInfo(IdMImplementationType.PUSH_ACTIONS).orElseThrow().classes();
         assertNotNull(actions);
     }
 
@@ -346,7 +344,7 @@ public class PushTaskITCase extends AbstractTaskITCase {
         assertNotNull(pushTask);
 
         ExecTO exec = execSchedTask(TASK_SERVICE, TaskType.PUSH, pushTask.getKey(), MAX_WAIT_SECONDS, false);
-        assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(exec.getStatus()));
+        assertSuccessful(exec);
 
         // 2. check
         assertNotNull(getLdapRemoteObject("ou=odd,o=isp"));
@@ -375,7 +373,7 @@ public class PushTaskITCase extends AbstractTaskITCase {
         ExecTO execution = execSchedTask(TASK_SERVICE, TaskType.PUSH, pushTaskKey, MAX_WAIT_SECONDS, false);
 
         // 3. verify execution status
-        assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+        assertSuccessful(execution);
     }
 
     @Test
@@ -458,7 +456,7 @@ public class PushTaskITCase extends AbstractTaskITCase {
 
             // execute the new task
             ExecTO exec = execSchedTask(TASK_SERVICE, TaskType.PUSH, push.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(exec.getStatus()));
+            assertSuccessful(exec);
         } finally {
             GROUP_SERVICE.delete(groupTO.getKey());
             if (newResourceTO != null) {
@@ -510,37 +508,5 @@ public class PushTaskITCase extends AbstractTaskITCase {
 
         NotificationTaskTO taskTO = findNotificationTask(notification.getKey(), 50);
         assertNotNull(taskTO);
-    }
-
-    @Test
-    void issueSYNCOPE1918() throws Exception {
-        // update group citizen
-        GroupUR groupUR = new GroupUR.Builder("29f96485-729e-4d31-88a1-6fc60e4677f3").
-                udynMembershipCond("username=~ros*").
-                adynMembershipCond(PRINTER, "name=~hp*").
-                build();
-        GroupTO citizen = updateGroup(groupUR).getEntity();
-        assertNotNull(citizen.getUDynMembershipCond());
-        assertFalse(citizen.getADynMembershipConds().isEmpty());
-
-        try {
-            execProvisioningTasks(
-                    TASK_SERVICE,
-                    TaskType.PUSH,
-                    Set.of("fd905ba5-9d56-4f51-83e2-859096a67b75"),
-                    MAX_WAIT_SECONDS, false);
-
-            citizen = GROUP_SERVICE.read("29f96485-729e-4d31-88a1-6fc60e4677f3");
-            assertNotNull(citizen.getUDynMembershipCond());
-            assertFalse(citizen.getADynMembershipConds().isEmpty());
-        } finally {
-            // restore group citizen
-            groupUR.setUDynMembershipCond(null);
-            groupUR.getADynMembershipConds().clear();
-            citizen = updateGroup(groupUR).getEntity();
-
-            assertNull(citizen.getUDynMembershipCond());
-            assertTrue(citizen.getADynMembershipConds().isEmpty());
-        }
     }
 }

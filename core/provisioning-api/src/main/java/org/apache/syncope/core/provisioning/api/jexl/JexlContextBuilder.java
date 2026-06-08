@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.MapContext;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.ClassUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -40,11 +39,9 @@ import org.apache.syncope.common.lib.Attr;
 import org.apache.syncope.common.lib.to.AnyTO;
 import org.apache.syncope.common.lib.to.RealmTO;
 import org.apache.syncope.core.persistence.api.entity.Any;
-import org.apache.syncope.core.persistence.api.entity.Attributable;
 import org.apache.syncope.core.persistence.api.entity.PlainAttr;
 import org.apache.syncope.core.persistence.api.entity.Realm;
 import org.apache.syncope.core.persistence.api.utils.FormatUtils;
-import org.apache.syncope.core.provisioning.api.DerAttrHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.ReflectionUtils;
@@ -53,7 +50,9 @@ public class JexlContextBuilder {
 
     protected static final Logger LOG = LoggerFactory.getLogger(JexlContextBuilder.class);
 
-    private static final String[] IGNORE_FIELDS = { "password", "clearPassword", "serialVersionUID", "class" };
+    private static final Set<String> IGNORE_FIELDS = Set.of(
+            "class", "serialVersionUID", "cipherAlgorithm", "password", "passwordHistory",
+            "securityAnswer", "mfa", "token", "tokenExpireTime");
 
     private static final Map<Class<?>, Set<Pair<PropertyDescriptor, Field>>> FIELD_CACHE =
             Collections.synchronizedMap(new HashMap<>());
@@ -80,7 +79,7 @@ public class JexlContextBuilder {
                 try {
                     for (PropertyDescriptor desc : Introspector.getBeanInfo(clazz).getPropertyDescriptors()) {
                         if (!desc.getName().startsWith("pc")
-                                && !ArrayUtils.contains(IGNORE_FIELDS, desc.getName())
+                                && !IGNORE_FIELDS.contains(desc.getName())
                                 && !Collection.class.isAssignableFrom(desc.getPropertyType())
                                 && !Map.class.isAssignableFrom(desc.getPropertyType())
                                 && !desc.getPropertyType().isArray()) {
@@ -185,13 +184,7 @@ public class JexlContextBuilder {
         return this;
     }
 
-    public JexlContextBuilder derAttrs(final Attributable attributable, final DerAttrHandler derAttrHandler) {
-        Map<String, String> derAttrs = attributable instanceof Realm realm
-                ? derAttrHandler.getValues(realm)
-                : attributable instanceof Any any
-                        ? derAttrHandler.getValues(any)
-                        : Map.of();
-
+    public JexlContextBuilder derAttrs(final Map<String, String> derAttrs) {
         derAttrs.forEach((schema, value) -> jexlContext.set(schema, value));
 
         return this;

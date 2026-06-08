@@ -34,6 +34,7 @@ import org.apache.syncope.core.persistence.api.dao.UserDAO;
 import org.apache.syncope.core.persistence.api.entity.Any;
 import org.apache.syncope.core.persistence.api.entity.AnyTypeClass;
 import org.apache.syncope.core.persistence.api.entity.AuditEvent;
+import org.apache.syncope.core.persistence.api.entity.Entity;
 import org.apache.syncope.core.persistence.api.entity.Groupable;
 import org.apache.syncope.core.persistence.api.entity.PlainAttr;
 import org.apache.syncope.core.persistence.api.entity.PlainAttrValue;
@@ -90,6 +91,17 @@ public class OpenSearchUtils {
         builder.put("relationshipTypes", relationshipTypes);
     }
 
+    protected void addPlainAttr(final Map<String, Object> builder, final List<PlainAttr> plainAttrs) {
+        for (PlainAttr plainAttr : plainAttrs) {
+            List<Object> values = plainAttr.getValues().stream().
+                    map(PlainAttrValue::getValue).collect(Collectors.toList());
+
+            Optional.ofNullable(plainAttr.getUniqueValue()).ifPresent(v -> values.add(v.getValue()));
+
+            builder.put(plainAttr.getSchema(), values.size() == 1 ? values.getFirst() : values);
+        }
+    }
+
     /**
      * Returns the document specialized with content from the provided any.
      *
@@ -110,6 +122,8 @@ public class OpenSearchUtils {
         builder.put("lastChangeContext", any.getLastChangeContext());
         builder.put("status", any.getStatus());
         builder.put("auxClasses", any.getAuxClasses().stream().map(AnyTypeClass::getKey).toList());
+        Optional.ofNullable(any.getUManager()).ifPresent(um -> builder.put("uManager", um.getKey()));
+        Optional.ofNullable(any.getGManager()).ifPresent(gm -> builder.put("gManager", gm.getKey()));
 
         switch (any) {
             case AnyObject anyObject -> {
@@ -120,28 +134,22 @@ public class OpenSearchUtils {
                 relationships(anyObjectDAO.findAllRelationships(anyObject), builder);
 
                 builder.put("resources", anyObjectDAO.findAllResourceKeys(anyObject.getKey()));
-                builder.put("dynRealms", anyObjectDAO.findDynRealms(anyObject.getKey()));
 
                 customizeDocument(builder, anyObject);
             }
             case Group group -> {
                 builder.put("name", group.getName());
-                Optional.ofNullable(group.getUserOwner()).ifPresent(uo -> builder.put("userOwner", uo.getKey()));
-                Optional.ofNullable(group.getGroupOwner()).ifPresent(go -> builder.put("groupOwner", go.getKey()));
 
                 Set<String> members = new HashSet<>();
                 members.addAll(groupDAO.findUMemberships(group, Pageable.unpaged()).stream().
                         map(membership -> membership.getLeftEnd().getKey()).toList());
-                members.addAll(groupDAO.findUDynMembers(group));
                 members.addAll(groupDAO.findAMemberships(group).stream().
                         map(membership -> membership.getLeftEnd().getKey()).toList());
-                members.addAll(groupDAO.findADynMembers(group));
                 builder.put("members", members);
 
                 relationships(group.getRelationships(), builder);
 
                 builder.put("resources", groupDAO.findAllResourceKeys(group.getKey()));
-                builder.put("dynRealms", groupDAO.findDynRealms(group.getKey()));
 
                 customizeDocument(builder, group);
             }
@@ -162,7 +170,6 @@ public class OpenSearchUtils {
                 relationships(user.getRelationships(), builder);
 
                 builder.put("resources", userDAO.findAllResourceKeys(user.getKey()));
-                builder.put("dynRealms", userDAO.findDynRealms(user.getKey()));
 
                 customizeDocument(builder, user);
             }
@@ -170,14 +177,7 @@ public class OpenSearchUtils {
             }
         }
 
-        for (PlainAttr plainAttr : any.getPlainAttrs()) {
-            List<Object> values = plainAttr.getValues().stream().
-                    map(PlainAttrValue::getValue).collect(Collectors.toList());
-
-            Optional.ofNullable(plainAttr.getUniqueValue()).ifPresent(v -> values.add(v.getValue()));
-
-            builder.put(plainAttr.getSchema(), values.size() == 1 ? values.getFirst() : values);
-        }
+        addPlainAttr(builder, any.getPlainAttrs());
 
         // add also flattened membership attributes
         if (any instanceof Groupable<?, ?, ?> groupable) {
@@ -215,6 +215,9 @@ public class OpenSearchUtils {
         builder.put("name", realm.getName());
         builder.put("parent_id", realm.getParent() == null ? null : realm.getParent().getKey());
         builder.put("fullPath", realm.getFullPath());
+        builder.put("auxClasses", realm.getAnyTypeClasses().stream().map(AnyTypeClass::getKey).toList());
+        builder.put("resources", realm.getResources().stream().map(Entity::getKey).toList());
+        addPlainAttr(builder, realm.getPlainAttrs());
 
         customizeDocument(builder, realm);
 
@@ -240,8 +243,6 @@ public class OpenSearchUtils {
         return builder;
     }
 
-    protected void customizeDocument(
-            final Map<String, Object> builder,
-            final AuditEvent auditEvent) {
+    protected void customizeDocument(final Map<String, Object> builder, final AuditEvent auditEvent) {
     }
 }

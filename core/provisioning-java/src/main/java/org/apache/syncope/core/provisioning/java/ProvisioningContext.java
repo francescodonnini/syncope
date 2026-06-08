@@ -30,6 +30,7 @@ import org.apache.syncope.core.persistence.api.DomainHolder;
 import org.apache.syncope.core.persistence.api.EncryptorManager;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AccessTokenDAO;
+import org.apache.syncope.core.persistence.api.dao.AnyChecker;
 import org.apache.syncope.core.persistence.api.dao.AnyMatchDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnySearchDAO;
@@ -41,13 +42,13 @@ import org.apache.syncope.core.persistence.api.dao.AuthModuleDAO;
 import org.apache.syncope.core.persistence.api.dao.ConnInstanceDAO;
 import org.apache.syncope.core.persistence.api.dao.DelegationDAO;
 import org.apache.syncope.core.persistence.api.dao.DerSchemaDAO;
-import org.apache.syncope.core.persistence.api.dao.DynRealmDAO;
 import org.apache.syncope.core.persistence.api.dao.ExternalResourceDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.ImplementationDAO;
 import org.apache.syncope.core.persistence.api.dao.JobStatusDAO;
 import org.apache.syncope.core.persistence.api.dao.MailTemplateDAO;
 import org.apache.syncope.core.persistence.api.dao.NotificationDAO;
+import org.apache.syncope.core.persistence.api.dao.OIDCOpEntityDAO;
 import org.apache.syncope.core.persistence.api.dao.PlainSchemaDAO;
 import org.apache.syncope.core.persistence.api.dao.PolicyDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmDAO;
@@ -64,7 +65,7 @@ import org.apache.syncope.core.persistence.api.dao.WAConfigDAO;
 import org.apache.syncope.core.persistence.api.entity.AnyUtilsFactory;
 import org.apache.syncope.core.persistence.api.entity.EntityFactory;
 import org.apache.syncope.core.persistence.api.entity.task.TaskUtilsFactory;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
 import org.apache.syncope.core.persistence.api.utils.RealmUtils;
 import org.apache.syncope.core.provisioning.api.AnyObjectProvisioningManager;
 import org.apache.syncope.core.provisioning.api.AuditEventProcessor;
@@ -87,12 +88,11 @@ import org.apache.syncope.core.provisioning.api.data.AuthProfileDataBinder;
 import org.apache.syncope.core.provisioning.api.data.ClientAppDataBinder;
 import org.apache.syncope.core.provisioning.api.data.ConnInstanceDataBinder;
 import org.apache.syncope.core.provisioning.api.data.DelegationDataBinder;
-import org.apache.syncope.core.provisioning.api.data.DynRealmDataBinder;
 import org.apache.syncope.core.provisioning.api.data.FIQLQueryDataBinder;
 import org.apache.syncope.core.provisioning.api.data.GroupDataBinder;
 import org.apache.syncope.core.provisioning.api.data.ImplementationDataBinder;
 import org.apache.syncope.core.provisioning.api.data.NotificationDataBinder;
-import org.apache.syncope.core.provisioning.api.data.OIDCJWKSDataBinder;
+import org.apache.syncope.core.provisioning.api.data.OIDCOpEntityDataBinder;
 import org.apache.syncope.core.provisioning.api.data.PasswordManagementDataBinder;
 import org.apache.syncope.core.provisioning.api.data.PolicyDataBinder;
 import org.apache.syncope.core.provisioning.api.data.RealmDataBinder;
@@ -130,12 +130,11 @@ import org.apache.syncope.core.provisioning.java.data.AuthProfileDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.ClientAppDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.ConnInstanceDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.DelegationDataBinderImpl;
-import org.apache.syncope.core.provisioning.java.data.DynRealmDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.FIQLQueryDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.GroupDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.ImplementationDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.NotificationDataBinderImpl;
-import org.apache.syncope.core.provisioning.java.data.OIDCJWKSDataBinderImpl;
+import org.apache.syncope.core.provisioning.java.data.OIDCOpEntityDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.PasswordManagementDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.PolicyDataBinderImpl;
 import org.apache.syncope.core.provisioning.java.data.RealmDataBinderImpl;
@@ -155,7 +154,6 @@ import org.apache.syncope.core.provisioning.java.data.wa.WAClientAppDataBinderIm
 import org.apache.syncope.core.provisioning.java.job.DefaultJobManager;
 import org.apache.syncope.core.provisioning.java.job.JobStatusUpdater;
 import org.apache.syncope.core.provisioning.java.job.SyncopeTaskScheduler;
-import org.apache.syncope.core.provisioning.java.job.SystemLoadReporterJob;
 import org.apache.syncope.core.provisioning.java.job.notification.MailNotificationJobDelegate;
 import org.apache.syncope.core.provisioning.java.job.notification.NotificationJob;
 import org.apache.syncope.core.provisioning.java.notification.DefaultNotificationManager;
@@ -176,8 +174,8 @@ import org.apache.syncope.core.workflow.api.UserWorkflowAdapter;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -291,7 +289,8 @@ public class ProvisioningContext {
             final ReportDAO reportDAO,
             final ImplementationDAO implementationDAO,
             final TaskUtilsFactory taskUtilsFactory,
-            final ConfParamOps confParamOps) {
+            final ConfParamOps confParamOps,
+            final ConfigurableApplicationContext ctx) {
 
         return new DefaultJobManager(
                 domainHolder,
@@ -302,7 +301,8 @@ public class ProvisioningContext {
                 implementationDAO,
                 taskUtilsFactory,
                 confParamOps,
-                securityProperties);
+                securityProperties,
+                ctx);
     }
 
     /**
@@ -336,7 +336,8 @@ public class ProvisioningContext {
             final RealmSearchDAO realmSearchDAO,
             final ExternalResourceDAO resourceDAO,
             final ConnInstanceDataBinder connInstanceDataBinder,
-            final AsyncConnectorFacade asyncConnectorFacade) {
+            final AsyncConnectorFacade asyncConnectorFacade,
+            final ConfigurableApplicationContext ctx) {
 
         return new DefaultConnectorManager(
                 connIdBundleManager,
@@ -345,7 +346,8 @@ public class ProvisioningContext {
                 resourceDAO,
                 connInstanceDataBinder,
                 asyncConnectorFacade,
-                entityFactory);
+                entityFactory,
+                ctx);
     }
 
     @ConditionalOnMissingBean
@@ -391,8 +393,8 @@ public class ProvisioningContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public DerAttrHandler derAttrHandler(final AnyUtilsFactory anyUtilsFactory, final JexlTools jexlTools) {
-        return new DefaultDerAttrHandler(anyUtilsFactory, jexlTools);
+    public DerAttrHandler derAttrHandler(final AnyChecker anyChecker, final JexlTools jexlTools) {
+        return new DefaultDerAttrHandler(anyChecker, jexlTools);
     }
 
     @ConditionalOnMissingBean
@@ -531,13 +533,15 @@ public class ProvisioningContext {
             final UserWorkflowAdapter uwfAdapter,
             final PropagationManager propagationManager,
             final PropagationTaskExecutor taskExecutor,
-            final UserDAO userDAO) {
+            final UserDAO userDAO,
+            final EncryptorManager encryptorManager) {
 
         return new DefaultUserProvisioningManager(
                 uwfAdapter,
                 propagationManager,
                 taskExecutor,
-                userDAO);
+                userDAO,
+                encryptorManager);
     }
 
     @ConditionalOnMissingBean
@@ -576,7 +580,7 @@ public class ProvisioningContext {
     @Bean
     public NotificationManager notificationManager(
             final EntityFactory entityFactory,
-            final SearchCondVisitor searchCondVisitor,
+            final AnySearchCondVisitor searchCondVisitor,
             final DerSchemaDAO derSchemaDAO,
             final NotificationDAO notificationDAO,
             final AnyObjectDAO anyObjectDAO,
@@ -643,21 +647,17 @@ public class ProvisioningContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public SystemLoadReporterJob systemLoadReporterJob(final ApplicationContext ctx) {
-        return new SystemLoadReporterJob(ctx);
-    }
-
-    @ConditionalOnMissingBean
-    @Bean
     public NotificationJobDelegate notificationJobDelegate(
-            final TaskUtilsFactory taskUtilsFactory,
+            final ConfParamOps confParamOps,
             final TaskDAO taskDAO,
+            final TaskUtilsFactory taskUtilsFactory,
             final AuditManager auditManager,
             final NotificationManager notificationManager,
             final ApplicationEventPublisher publisher,
             final JavaMailSender mailSender) {
 
         return new MailNotificationJobDelegate(
+                confParamOps,
                 taskDAO,
                 taskUtilsFactory,
                 auditManager,
@@ -681,7 +681,6 @@ public class ProvisioningContext {
     public LiveSyncTaskSaver liveSyncTaskExecSaver(
             final ExternalResourceDAO resourceDAO,
             final TaskDAO taskDAO,
-            final TaskExecDAO taskExecDAO,
             final TaskUtilsFactory taskUtilsFactory,
             final NotificationManager notificationManager,
             final AuditManager auditManager) {
@@ -689,7 +688,6 @@ public class ProvisioningContext {
         return new LiveSyncTaskSaver(
                 resourceDAO,
                 taskDAO,
-                taskExecDAO,
                 taskUtilsFactory,
                 notificationManager,
                 auditManager);
@@ -728,6 +726,7 @@ public class ProvisioningContext {
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final DerAttrHandler derAttrHandler,
             final MappingManager mappingManager,
             final IntAttrNameParser intAttrNameParser,
@@ -745,6 +744,7 @@ public class ProvisioningContext {
                 plainSchemaDAO,
                 resourceDAO,
                 relationshipTypeDAO,
+                anyChecker,
                 entityFactory,
                 anyUtilsFactory,
                 derAttrHandler,
@@ -759,11 +759,12 @@ public class ProvisioningContext {
     @Bean
     public AnyTypeClassDataBinder anyTypeClassDataBinder(
             final EntityFactory entityFactory,
+            final AnyTypeClassDAO anyTypeClassDAO,
             final PlainSchemaDAO plainSchemaDAO,
             final DerSchemaDAO derSchemaDAO,
             final AnyTypeDAO anyTypeDAO) {
 
-        return new AnyTypeClassDataBinderImpl(plainSchemaDAO, derSchemaDAO, anyTypeDAO, entityFactory);
+        return new AnyTypeClassDataBinderImpl(anyTypeClassDAO, plainSchemaDAO, derSchemaDAO, anyTypeDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -820,9 +821,10 @@ public class ProvisioningContext {
     public ClientAppDataBinder clientAppDataBinder(
             final PolicyDAO policyDAO,
             final RealmSearchDAO realmSearchDAO,
+            final OIDCOpEntityDAO oidcOEntityDAO,
             final EntityFactory entityFactory) {
 
-        return new ClientAppDataBinderImpl(policyDAO, realmSearchDAO, entityFactory);
+        return new ClientAppDataBinderImpl(policyDAO, realmSearchDAO, oidcOEntityDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -849,7 +851,7 @@ public class ProvisioningContext {
     @ConditionalOnMissingBean
     @Bean
     public FIQLQueryDataBinder fiqlQueryDataBinder(
-            final SearchCondVisitor searchCondVisitor,
+            final AnySearchCondVisitor searchCondVisitor,
             final UserDAO userDAO,
             final EntityFactory entityFactory) {
 
@@ -858,20 +860,9 @@ public class ProvisioningContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public DynRealmDataBinder dynRealmDataBinder(
-            final AnyTypeDAO anyTypeDAO,
-            final DynRealmDAO dynRealmDAO,
-            final SearchCondVisitor searchCondVisitor,
-            final EntityFactory entityFactory) {
-
-        return new DynRealmDataBinderImpl(anyTypeDAO, dynRealmDAO, entityFactory, searchCondVisitor);
-    }
-
-    @ConditionalOnMissingBean
-    @Bean
     public GroupDataBinder groupDataBinder(
             final EntityFactory entityFactory,
-            final SearchCondVisitor searchCondVisitor,
+            final AnySearchCondVisitor searchCondVisitor,
             final AnyUtilsFactory anyUtilsFactory,
             final AnyTypeDAO anyTypeDAO,
             final RealmSearchDAO realmSearchDAO,
@@ -882,6 +873,7 @@ public class ProvisioningContext {
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final DerAttrHandler derAttrHandler,
             final MappingManager mappingManager,
             final IntAttrNameParser intAttrNameParser,
@@ -899,6 +891,7 @@ public class ProvisioningContext {
                 plainSchemaDAO,
                 resourceDAO,
                 relationshipTypeDAO,
+                anyChecker,
                 entityFactory,
                 anyUtilsFactory,
                 derAttrHandler,
@@ -936,8 +929,11 @@ public class ProvisioningContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public OIDCJWKSDataBinder oidcJWKSDataBinder(final EntityFactory entityFactory) {
-        return new OIDCJWKSDataBinderImpl(entityFactory);
+    public OIDCOpEntityDataBinder oidcOpEntityDataBinder(
+            final WAConfigDAO waConfigDAO,
+            final EntityFactory entityFactory) {
+
+        return new OIDCOpEntityDataBinderImpl(waConfigDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -990,11 +986,12 @@ public class ProvisioningContext {
     @ConditionalOnMissingBean
     @Bean
     public RelationshipTypeDataBinder relationshipTypeDataBinder(
+            final RelationshipTypeDAO relationshipTypeDAO,
             final AnyTypeDAO anyTypeDAO,
             final AnyTypeClassDAO anyTypeClassDAO,
             final EntityFactory entityFactory) {
 
-        return new RelationshipTypeDataBinderImpl(anyTypeDAO, anyTypeClassDAO, entityFactory);
+        return new RelationshipTypeDataBinderImpl(relationshipTypeDAO, anyTypeDAO, anyTypeClassDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -1044,17 +1041,10 @@ public class ProvisioningContext {
     @Bean
     public RoleDataBinder roleDataBinder(
             final EntityFactory entityFactory,
-            final SearchCondVisitor searchCondVisitor,
             final RealmSearchDAO realmSearchDAO,
-            final DynRealmDAO dynRealmDAO,
             final RoleDAO roleDAO) {
 
-        return new RoleDataBinderImpl(
-                realmSearchDAO,
-                dynRealmDAO,
-                roleDAO,
-                entityFactory,
-                searchCondVisitor);
+        return new RoleDataBinderImpl(realmSearchDAO, roleDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -1140,6 +1130,7 @@ public class ProvisioningContext {
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final DerAttrHandler derAttrHandler,
             final MappingManager mappingManager,
             final IntAttrNameParser intAttrNameParser,
@@ -1162,6 +1153,7 @@ public class ProvisioningContext {
                 plainSchemaDAO,
                 resourceDAO,
                 relationshipTypeDAO,
+                anyChecker,
                 entityFactory,
                 anyUtilsFactory,
                 derAttrHandler,

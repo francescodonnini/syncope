@@ -19,9 +19,9 @@ under the License.
 -->
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:wicket="http://wicket.apache.org">
   <wicket:panel>
-    <div class="sidebar-brand bg-red d-flex" style="height: 57px;">
+    <div class="sidebar-brand bg-red">
       <span>
-        <img src="ui-commons/img/logo-mini.png" alt="Apache Syncope Logo" class="brand-image" style="max-height: none; opacity: .8;"/>
+        <img src="ui-commons/img/logo-mini.png" alt="Apache Syncope Logo" class="brand-image"/>
         <span class="brand-text fw-light text-white">Apache Syncope</span>
       </span>
     </div>
@@ -65,6 +65,12 @@ under the License.
                   <a href="#" class="nav-link" wicket:id="editsecurityquestion"><i class="nav-icon fa fa-lock"></i>
                     <p>
                       <wicket:message key="editsecurityquestion"/>
+                    </p>
+                  </a></li>
+                <li class="nav-item" wicket:id="dismissmfaLI">
+                  <a href="#" class="nav-link" wicket:id="dismissmfa"><i class="nav-icon fas fa-door-closed"></i>
+                    <p>
+                      <wicket:message key="dismissmfa"/>
                     </p>
                   </a></li>
               </ul>

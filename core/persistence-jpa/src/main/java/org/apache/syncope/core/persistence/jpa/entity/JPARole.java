@@ -18,31 +18,24 @@
  */
 package org.apache.syncope.core.persistence.jpa.entity;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.persistence.Cacheable;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToMany;
-import jakarta.persistence.PostLoad;
-import jakarta.persistence.PostPersist;
-import jakarta.persistence.PostUpdate;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.syncope.core.persistence.api.entity.DynRealm;
 import org.apache.syncope.core.persistence.api.entity.Realm;
 import org.apache.syncope.core.persistence.api.entity.Role;
-import org.apache.syncope.core.provisioning.api.serialization.POJOHelper;
+import org.apache.syncope.core.persistence.jpa.converters.StringSetConverter;
 
 @Entity
 @Table(name = JPARole.TABLE)
@@ -53,16 +46,9 @@ public class JPARole extends AbstractProvidedKeyEntity implements Role {
 
     public static final String TABLE = "SyncopeRole";
 
-    protected static final TypeReference<Set<String>> TYPEREF = new TypeReference<Set<String>>() {
-    };
-
+    @Convert(converter = StringSetConverter.class)
     @Lob
-    private String entitlements;
-
-    @Transient
-    private Set<String> entitlementsSet = new HashSet<>();
-
-    private String dynMembershipCond;
+    private Set<String> entitlements = new HashSet<>();
 
     @Lob
     private String anyLayout;
@@ -77,29 +63,9 @@ public class JPARole extends AbstractProvidedKeyEntity implements Role {
     @Valid
     private List<JPARealm> realms = new ArrayList<>();
 
-    @ManyToMany(fetch = FetchType.EAGER)
-    @JoinTable(joinColumns =
-            @JoinColumn(name = "role_id"),
-            inverseJoinColumns =
-            @JoinColumn(name = "dynamicRealm_id"),
-            uniqueConstraints =
-            @UniqueConstraint(columnNames = { "role_id", "dynamicRealm_id" }))
-    @Valid
-    private List<JPADynRealm> dynRealms = new ArrayList<>();
-
     @Override
     public Set<String> getEntitlements() {
-        return entitlementsSet;
-    }
-
-    @Override
-    public String getDynMembershipCond() {
-        return dynMembershipCond;
-    }
-
-    @Override
-    public void setDynMembershipCond(final String dynMembershipCond) {
-        this.dynMembershipCond = dynMembershipCond;
+        return entitlements;
     }
 
     @Override
@@ -114,17 +80,6 @@ public class JPARole extends AbstractProvidedKeyEntity implements Role {
     }
 
     @Override
-    public boolean add(final DynRealm dynamicRealm) {
-        checkType(dynamicRealm, JPADynRealm.class);
-        return dynRealms.contains((JPADynRealm) dynamicRealm) || dynRealms.add((JPADynRealm) dynamicRealm);
-    }
-
-    @Override
-    public List<? extends DynRealm> getDynRealms() {
-        return dynRealms;
-    }
-
-    @Override
     public String getAnyLayout() {
         return anyLayout;
     }
@@ -132,31 +87,5 @@ public class JPARole extends AbstractProvidedKeyEntity implements Role {
     @Override
     public void setAnyLayout(final String anyLayout) {
         this.anyLayout = anyLayout;
-    }
-
-    protected void json2list(final boolean clearFirst) {
-        if (clearFirst) {
-            getEntitlements().clear();
-        }
-        if (entitlements != null) {
-            getEntitlements().addAll(POJOHelper.deserialize(entitlements, TYPEREF));
-        }
-    }
-
-    @PostLoad
-    public void postLoad() {
-        json2list(false);
-    }
-
-    @PostPersist
-    @PostUpdate
-    public void postSave() {
-        json2list(true);
-    }
-
-    @PrePersist
-    @PreUpdate
-    public void list2json() {
-        entitlements = POJOHelper.serialize(getEntitlements());
     }
 }

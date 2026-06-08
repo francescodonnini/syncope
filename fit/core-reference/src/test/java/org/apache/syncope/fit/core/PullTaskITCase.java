@@ -37,9 +37,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,7 +49,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
@@ -196,7 +195,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
     @Test
     public void getPullActionsClasses() {
         Set<String> actions = ANONYMOUS_CLIENT.platform().
-                getJavaImplInfo(IdMImplementationType.INBOUND_ACTIONS).orElseThrow().getClasses();
+                getJavaImplInfo(IdMImplementationType.INBOUND_ACTIONS).orElseThrow().classes();
         assertNotNull(actions);
         assertFalse(actions.isEmpty());
     }
@@ -287,7 +286,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             assertNotNull(usersPre);
 
             ExecTO exec = execSchedTask(TASK_SERVICE, TaskType.PULL, PULL_TASK_KEY, MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(exec.getStatus()));
+            assertSuccessful(exec);
 
             LOG.debug("Execution of task {}:\n{}", PULL_TASK_KEY, exec);
 
@@ -381,7 +380,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
         try {
             ExecTO execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, "83f7e85d-9774-43fe-adba-ccd856312994", MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             userTO = USER_SERVICE.read("testuser1");
             assertNotNull(userTO);
@@ -396,7 +395,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             // re-execute the same PullTask: now user must be active
             execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, "83f7e85d-9774-43fe-adba-ccd856312994", MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             userTO = USER_SERVICE.read("testuser1");
             assertNotNull(userTO);
@@ -420,19 +419,13 @@ public class PullTaskITCase extends AbstractTaskITCase {
         ExecTO execution = execSchedTask(TASK_SERVICE, TaskType.PULL, LDAP_PULL_TASK, MAX_WAIT_SECONDS, false);
 
         // 1. verify execution status
-        assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+        assertSuccessful(execution);
 
         // SYNCOPE-898
         PullTaskTO task = TASK_SERVICE.read(TaskType.PULL, LDAP_PULL_TASK, false);
         assertEquals(SyncopeConstants.ROOT_REALM, task.getDestinationRealm());
 
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         // 2. verify that pulled group is found
         PagedResult<GroupTO> matchingGroups = GROUP_SERVICE.search(new AnyQuery.Builder().realm(
@@ -465,7 +458,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
         PagedResult<UserTO> matchByLastChangeContext = USER_SERVICE.search(
                 new AnyQuery.Builder().realm(SyncopeConstants.ROOT_REALM).
                         fiql(SyncopeClient.getUserSearchConditionBuilder().is("lastChangeContext").
-                                equalTo("*PullTask " + task.getKey() + "*").query()).
+                                equalTo("*Task " + task.getKey() + "*").query()).
                         build());
         assertNotNull(matchByLastChangeContext);
         assertNotEquals(0, matchByLastChangeContext.getTotalCount());
@@ -475,15 +468,17 @@ public class PullTaskITCase extends AbstractTaskITCase {
         assertEquals("testLDAPGroup", groupTO.getName());
         assertTrue(groupTO.getLastChangeContext().contains("Task " + task.getKey()));
         assertEquals("true", groupTO.getPlainAttr("show").orElseThrow().getValues().getFirst());
-        assertEquals(matchingUsers.getResult().getFirst().getKey(), groupTO.getUserOwner());
-        assertNull(groupTO.getGroupOwner());
+        assertEquals(matchingUsers.getResult().getFirst().getKey(), groupTO.getUManager());
+        assertNull(groupTO.getGManager());
         // SYNCOPE-1343, set value title to null on LDAP
         ConnObject userConnObject = RESOURCE_SERVICE.readConnObject(
                 RESOURCE_NAME_LDAP, AnyTypeKind.USER.name(), matchingUsers.getResult().getFirst().getKey());
         assertNotNull(userConnObject);
         assertEquals("odd", userConnObject.getAttr("title").orElseThrow().getValues().getFirst());
         Attr userDn = userConnObject.getAttr(Name.NAME).orElseThrow();
-        updateLdapRemoteObject(userDn.getValues().getFirst(), Collections.singletonMap("title", null));
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("title", null);
+        updateLdapRemoteObject(userDn.getValues().getFirst(), attributes);
 
         // SYNCOPE-317
         execSchedTask(TASK_SERVICE, TaskType.PULL, LDAP_PULL_TASK, MAX_WAIT_SECONDS, false);
@@ -510,7 +505,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
                         fiql(SyncopeClient.getUserSearchConditionBuilder().is("username").equalTo("pullFromLDAP").
                                 query()).
                         build());
-        assertNull(matchingUsers.getResult().getFirst().getPlainAttr("title").orElse(null));
+        assertTrue(matchingUsers.getResult().getFirst().getPlainAttr("title").isEmpty());
 
         // SYNCOPE-1356 remove group membership from LDAP, pull and check in Syncope
         ConnObject groupConnObject = RESOURCE_SERVICE.readConnObject(
@@ -551,8 +546,9 @@ public class PullTaskITCase extends AbstractTaskITCase {
                 transformer.setKey("PrefixItemTransformer");
                 transformer.setEngine(ImplementationEngine.GROOVY);
                 transformer.setType(IdRepoImplementationType.ITEM_TRANSFORMER);
-                transformer.setBody(IOUtils.toString(
-                        getClass().getResourceAsStream("/PrefixItemTransformer.groovy"), StandardCharsets.UTF_8));
+                transformer.setBody(new String(
+                        getClass().getResourceAsStream("/PrefixItemTransformer.groovy").readAllBytes(),
+                        StandardCharsets.UTF_8));
                 Response response = IMPLEMENTATION_SERVICE.create(transformer);
                 transformer = IMPLEMENTATION_SERVICE.read(
                         transformer.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -594,13 +590,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             assertTrue(connObjectTO.getAttr("LOCATION").orElseThrow().getValues().getFirst().startsWith(prefix));
 
             // 3. unlink any existing printer and delete from Syncope (printer is now only on external resource)
-            if (IS_EXT_SEARCH_ENABLED) {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    // ignore
-                }
-            }
+            awaitIfExtSearchEnabled();
 
             PagedResult<AnyObjectTO> matchingPrinters = ANY_OBJECT_SERVICE.search(
                     new AnyQuery.Builder().realm(SyncopeConstants.ROOT_REALM).
@@ -621,23 +611,11 @@ public class PullTaskITCase extends AbstractTaskITCase {
             // 4. pull
             execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
 
-            if (IS_EXT_SEARCH_ENABLED) {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    // ignore
-                }
-            }
+            awaitIfExtSearchEnabled();
 
             // 5. verify that printer was re-created in Syncope (implies that location does not start with given prefix,
             // hence PrefixItemTransformer was applied during pull)
-            if (IS_EXT_SEARCH_ENABLED) {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    // ignore
-                }
-            }
+            awaitIfExtSearchEnabled();
 
             matchingPrinters = ANY_OBJECT_SERVICE.search(new AnyQuery.Builder().realm(SyncopeConstants.ROOT_REALM).
                     fiql(SyncopeClient.getAnyObjectSearchConditionBuilder(PRINTER).
@@ -672,8 +650,9 @@ public class PullTaskITCase extends AbstractTaskITCase {
             reconFilterBuilder.setKey("TestReconFilterBuilder");
             reconFilterBuilder.setEngine(ImplementationEngine.GROOVY);
             reconFilterBuilder.setType(IdMImplementationType.RECON_FILTER_BUILDER);
-            reconFilterBuilder.setBody(IOUtils.toString(
-                    getClass().getResourceAsStream("/TestReconFilterBuilder.groovy"), StandardCharsets.UTF_8));
+            reconFilterBuilder.setBody(new String(
+                    getClass().getResourceAsStream("/TestReconFilterBuilder.groovy").readAllBytes(),
+                    StandardCharsets.UTF_8));
             Response response = IMPLEMENTATION_SERVICE.create(reconFilterBuilder);
             reconFilterBuilder = IMPLEMENTATION_SERVICE.read(
                     reconFilterBuilder.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -689,9 +668,8 @@ public class PullTaskITCase extends AbstractTaskITCase {
             assertEquals(reconFilterBuilder.getKey(), task.getReconFilterBuilder());
 
             // 3. exec task
-            ExecTO execution = execSchedTask(
-                    TASK_SERVICE, TaskType.PULL, task.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            ExecTO execution = execSchedTask(TASK_SERVICE, TaskType.PULL, task.getKey(), MAX_WAIT_SECONDS, false);
+            assertSuccessful(execution);
 
             // 4. verify that only enabled user was pulled
             userTO = USER_SERVICE.read("user2");
@@ -773,7 +751,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
                     + "false, 'syncTokenWithErrors1@syncope.apache.org', 'true', '2015-05-23 13:53:24.293')");
 
             ExecTO exec = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(exec.getStatus()));
+            assertSuccessful(exec);
 
             resForTest = RESOURCE_SERVICE.read(resForTest.getKey());
             assertTrue(resForTest.getProvision(AnyTypeKind.USER.name()).orElseThrow().
@@ -784,7 +762,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
                     + "WHERE ID=1041");
 
             exec = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(exec.getStatus()));
+            assertSuccessful(exec);
 
             resForTest = RESOURCE_SERVICE.read(resForTest.getKey());
             assertTrue(resForTest.getProvision(AnyTypeKind.USER.name()).orElseThrow().
@@ -838,7 +816,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             // 3. execute the pull task and verify that:
             ExecTO execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // 3a. user was not pulled
             try {
@@ -865,7 +843,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             userCR.getResources().clear();
 
             String email = userCR.getPlainAttr("email").orElseThrow().getValues().getFirst();
-            userCR.getPlainAttrs().add(new Attr.Builder("userId").value(email).build());
+            userCR.getPlainAttrs().add(attr("userId", email));
 
             REMEDIATION_SERVICE.remedy(remediation.getKey(), userCR);
 
@@ -1000,7 +978,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
                     TASK_SERVICE, TaskType.PULL, pullTaskKey, 2 * MAX_WAIT_SECONDS, false);
 
             // 3. verify execution status
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // 4. verify that the given number of users was effectively pulled
             result = USER_SERVICE.search(new AnyQuery.Builder().fiql(
@@ -1072,7 +1050,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
             ExecTO execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, actual.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             userTO = USER_SERVICE.read("testuser2");
             assertNotNull(userTO);
@@ -1138,8 +1116,8 @@ public class PullTaskITCase extends AbstractTaskITCase {
                 corrRule.setKey("TestPullRule");
                 corrRule.setEngine(ImplementationEngine.GROOVY);
                 corrRule.setType(IdMImplementationType.INBOUND_CORRELATION_RULE);
-                corrRule.setBody(IOUtils.toString(
-                        getClass().getResourceAsStream("/TestPullRule.groovy"), StandardCharsets.UTF_8));
+                corrRule.setBody(new String(
+                        getClass().getResourceAsStream("/TestPullRule.groovy").readAllBytes(), StandardCharsets.UTF_8));
                 Response response = IMPLEMENTATION_SERVICE.create(corrRule);
                 corrRule = IMPLEMENTATION_SERVICE.read(
                         corrRule.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -1214,7 +1192,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
                     TASK_SERVICE, TaskType.PULL, "986867e2-993b-430e-8feb-aa9abb4c1dcd", MAX_WAIT_SECONDS, false);
 
             assertNotNull(taskExecTO.getStatus());
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(taskExecTO.getStatus()));
+            assertSuccessful(taskExecTO);
 
             userTO = USER_SERVICE.read(userTO.getKey());
             assertNotNull(userTO);
@@ -1267,7 +1245,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
         ExecTO execution = execSchedTask(
                 TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-        assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+        assertSuccessful(execution);
 
         // 5. Test the pulled user
         SyncopeClient.Self self = CLIENT_FACTORY.create(user.getUsername(), newCleanPassword).self();
@@ -1293,7 +1271,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             UserCR userCR = UserITCase.getUniqueSample("syncope313-ldap@syncope.apache.org");
             userCR.setPassword(oldCleanPassword);
             userCR.getResources().add(RESOURCE_NAME_LDAP);
-            user = createUser(userCR).getEntity();
+            user = getEntity(createUser(userCR));
             assertNotNull(user);
             assertFalse(user.getResources().isEmpty());
 
@@ -1302,15 +1280,15 @@ public class PullTaskITCase extends AbstractTaskITCase {
             UserUR userUR = new UserUR();
             userUR.setKey(user.getKey());
             userUR.setPassword(new PasswordPatch.Builder().value(newCleanPassword).build());
-            user = updateUser(userUR).getEntity();
+            user = getEntity(updateUser(userUR));
 
             // 3. Check that the Syncope user now has the changed password
             SyncopeClient.Self self = CLIENT_FACTORY.create(user.getUsername(), newCleanPassword).self();
             assertNotNull(self);
 
             // 4. Check that the LDAP resource has the old password
-            ConnObject connObject =
-                    RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_LDAP, AnyTypeKind.USER.name(), user.getKey());
+            ConnObject connObject = RESOURCE_SERVICE.readConnObject(
+                    RESOURCE_NAME_LDAP, AnyTypeKind.USER.name(), user.getKey());
             assertNotNull(getLdapRemoteObject(
                     connObject.getAttr(Name.NAME).orElseThrow().getValues().getFirst(),
                     oldCleanPassword,
@@ -1352,7 +1330,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
             ExecTO execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // 7. Test the pulled user
             self = CLIENT_FACTORY.create(user.getUsername(), oldCleanPassword).self();
@@ -1415,7 +1393,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             // 3. exec the pull task
             ExecTO execution = execSchedTask(
                     TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // the user is successfully pulled...
             user = USER_SERVICE.read("pullFromLDAP");
@@ -1426,8 +1404,8 @@ public class PullTaskITCase extends AbstractTaskITCase {
             group = GROUP_SERVICE.read("testLDAPGroup");
             assertNotNull(group);
 
-            ConnObject connObject =
-                    RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_LDAP, AnyTypeKind.USER.name(), user.getKey());
+            ConnObject connObject = RESOURCE_SERVICE.readConnObject(
+                    RESOURCE_NAME_LDAP, AnyTypeKind.USER.name(), user.getKey());
             assertNotNull(connObject);
             assertEquals(
                     "pullFromLDAP@syncope.apache.org",
@@ -1455,7 +1433,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
             // 5. exec the pull task again
             execution = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // the internal is updated...
             user = USER_SERVICE.read("pullFromLDAP");
@@ -1516,7 +1494,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             assertNotNull(pullTask);
 
             ExecTO execution = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             pullFromLDAP4issue1656 = USER_SERVICE.read("pullFromLDAP_issue1656");
             assertEquals("pullFromLDAP_issue1656@syncope.apache.org",
@@ -1533,7 +1511,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             updateLdapRemoteObject(userDn.getValues().getFirst(), Map.of("mail", "pullFromLDAP_issue1656@"));
             // 3. Pull again from resource-ldap
             execution = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
             assertTrue(execution.getMessage().contains("UPDATE FAILURE"));
             pullFromLDAP4issue1656 = USER_SERVICE.read("pullFromLDAP_issue1656");
             assertEquals("pullFromLDAP_issue1656@syncope.apache.org",
@@ -1585,8 +1563,9 @@ public class PullTaskITCase extends AbstractTaskITCase {
                 pullActions.setKey("AddResourcePullActions");
                 pullActions.setEngine(ImplementationEngine.GROOVY);
                 pullActions.setType(IdMImplementationType.INBOUND_ACTIONS);
-                pullActions.setBody(IOUtils.toString(
-                        getClass().getResourceAsStream("/AddResourcePullActions.groovy"), StandardCharsets.UTF_8));
+                pullActions.setBody(new String(
+                        getClass().getResourceAsStream("/AddResourcePullActions.groovy").readAllBytes(),
+                        StandardCharsets.UTF_8));
                 Response response = IMPLEMENTATION_SERVICE.create(pullActions);
                 pullActions = IMPLEMENTATION_SERVICE.read(
                         pullActions.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -1608,7 +1587,7 @@ public class PullTaskITCase extends AbstractTaskITCase {
             assertNotNull(pullTask);
 
             ExecTO execution = execSchedTask(TASK_SERVICE, TaskType.PULL, pullTask.getKey(), MAX_WAIT_SECONDS, false);
-            assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(execution.getStatus()));
+            assertSuccessful(execution);
 
             // 3. Test if password is not present in the propagation task for DB
             PagedResult<PropagationTaskTO> propagationTasks = TASK_SERVICE.search(
@@ -1643,7 +1622,6 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
     @Test
     public void issueSYNCOPE1905() {
-
         ldapCleanup();
 
         PullTaskTO pullTaskTO = new PullTaskTO();
@@ -1656,13 +1634,12 @@ public class PullTaskITCase extends AbstractTaskITCase {
 
         ProvisioningReport result = null;
         try {
-            List<ProvisioningReport> results =
-                    RECONCILIATION_SERVICE.pull(new ReconQuery.Builder(AnyTypeKind.GROUP.name(),
-                            RESOURCE_NAME_LDAP).fiql(
-                            SyncopeClient.getConnObjectTOFiqlSearchConditionBuilder()
-                                    .is(Uid.NAME)
-                                    .equalToIgnoreCase("testLDAPGroup")
-                                    .query()).build(), pullTaskTO);
+            List<ProvisioningReport> results = RECONCILIATION_SERVICE.pull(
+                    new ReconQuery.Builder(AnyTypeKind.GROUP.name(), RESOURCE_NAME_LDAP).fiql(
+                            SyncopeClient.getConnObjectTOFiqlSearchConditionBuilder().
+                                    is(Uid.NAME).equalToIgnoreCase("testLDAPGroup").query()).
+                            build(),
+                    pullTaskTO);
 
             assertNotNull(results.getFirst());
             result = results.getFirst();

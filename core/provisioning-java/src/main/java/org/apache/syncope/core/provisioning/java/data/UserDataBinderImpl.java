@@ -28,6 +28,7 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.AnyOperations;
 import org.apache.syncope.common.lib.Attr;
 import org.apache.syncope.common.lib.EntityTOUtils;
@@ -40,16 +41,17 @@ import org.apache.syncope.common.lib.request.UserUR;
 import org.apache.syncope.common.lib.to.ConnObject;
 import org.apache.syncope.common.lib.to.Item;
 import org.apache.syncope.common.lib.to.LinkedAccountTO;
-import org.apache.syncope.common.lib.to.MembershipTO;
 import org.apache.syncope.common.lib.to.RelationshipTO;
 import org.apache.syncope.common.lib.to.UserTO;
 import org.apache.syncope.common.lib.types.AnyTypeKind;
 import org.apache.syncope.common.lib.types.CipherAlgorithm;
 import org.apache.syncope.common.lib.types.ClientExceptionType;
+import org.apache.syncope.common.lib.types.Mfa;
 import org.apache.syncope.common.lib.types.PatchOperation;
 import org.apache.syncope.common.lib.types.ResourceOperation;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AccessTokenDAO;
+import org.apache.syncope.core.persistence.api.dao.AnyChecker;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeClassDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
@@ -113,6 +115,7 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final EntityFactory entityFactory,
             final AnyUtilsFactory anyUtilsFactory,
             final DerAttrHandler derAttrHandler,
@@ -137,6 +140,7 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
                 plainSchemaDAO,
                 resourceDAO,
                 relationshipTypeDAO,
+                anyChecker,
                 entityFactory,
                 anyUtilsFactory,
                 derAttrHandler,
@@ -216,7 +220,7 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
     protected void setCipherAlgorithm(final User user) {
         if (user.getCipherAlgorithm() == null) {
             user.setCipherAlgorithm(CipherAlgorithm.valueOf(confParamOps.get(AuthContextUtils.getDomain(),
-                    "password.cipher.algorithm", CipherAlgorithm.AES.name(), String.class)));
+                    StandardConfParams.PASSWORD_CIPHER_ALGORITHM, CipherAlgorithm.AES.name(), String.class)));
         }
     }
 
@@ -255,15 +259,13 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
         }
         account.setSuspended(accountTO.isSuspended());
 
+        new HashSet<>(account.getPlainAttrs()).forEach(account::remove);
         accountTO.getPlainAttrs().stream().
                 filter(attrTO -> !attrTO.getValues().isEmpty()).
                 forEach(attrTO -> getPlainSchema(attrTO.getSchema()).ifPresent(schema -> {
 
-            PlainAttr attr = account.getPlainAttr(schema.getKey()).orElseGet(() -> {
-                PlainAttr newAttr = new PlainAttr();
-                newAttr.setPlainSchema(schema);
-                return newAttr;
-            });
+            PlainAttr attr = new PlainAttr();
+            attr.setPlainSchema(schema);
             fillAttr(anyTO, attrTO.getValues(), schema, attr, invalidValues);
 
             if (!attr.getValuesAsStrings().isEmpty()) {
@@ -342,6 +344,8 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
 
     @Override
     public UserWorkflowResult.PropagationInfo update(final User toBeUpdated, final UserUR userUR) {
+        processAuxClasses(toBeUpdated, userUR);
+
         // Re-merge any pending change from workflow tasks
         User user = userDAO.save(toBeUpdated);
 
@@ -458,27 +462,34 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
 
         // linked accounts
         userUR.getLinkedAccounts().stream().filter(patch -> patch.getLinkedAccountTO() != null).forEach(patch -> {
-            user.getLinkedAccount(
-                    patch.getLinkedAccountTO().getResource(),
-                    patch.getLinkedAccountTO().getConnObjectKeyValue()).ifPresent(account -> {
+            switch (patch.getOperation()) {
+                case DELETE -> {
+                    user.getLinkedAccount(
+                            patch.getLinkedAccountTO().getResource(),
+                            patch.getLinkedAccountTO().getConnObjectKeyValue()).ifPresentOrElse(
+                            account -> {
+                                user.getLinkedAccounts().remove(account);
+                                account.setOwner(null);
 
-                if (patch.getOperation() == PatchOperation.DELETE) {
-                    user.getLinkedAccounts().remove(account);
-                    account.setOwner(null);
-
-                    propByLinkedAccount.add(
-                            ResourceOperation.DELETE,
-                            Pair.of(account.getResource().getKey(), account.getConnObjectKeyValue()));
+                                propByLinkedAccount.add(
+                                        ResourceOperation.DELETE,
+                                        Pair.of(account.getResource().getKey(), account.getConnObjectKeyValue()));
+                            },
+                            () -> LOG.debug("No linked acccount ({},{}) was found, nothing to delete",
+                                    patch.getLinkedAccountTO().getResource(),
+                                    patch.getLinkedAccountTO().getConnObjectKeyValue()));
                 }
 
-                new HashSet<>(account.getPlainAttrs()).forEach(account::remove);
-            });
-            if (patch.getOperation() == PatchOperation.ADD_REPLACE) {
-                linkedAccount(
-                        anyTO,
-                        user,
-                        patch.getLinkedAccountTO(),
-                        invalidValues);
+                case ADD_REPLACE -> {
+                    linkedAccount(
+                            anyTO,
+                            user,
+                            patch.getLinkedAccountTO(),
+                            invalidValues);
+                }
+
+                default -> {
+                }
             }
         });
         user.getLinkedAccounts().forEach(account -> propByLinkedAccount.add(
@@ -495,7 +506,7 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
 
         // Build final information for next stage (propagation)
         Map<String, ConnObject> afterOnResources =
-                onResources(user, userDAO.findAllResourceKeys(user.getKey()), password, changePwdRes);
+                onResources(saved, userDAO.findAllResourceKeys(saved.getKey()), password, changePwdRes);
         propByRes.merge(propByRes(beforeOnResources, afterOnResources));
 
         if (userUR.getMustChangePassword() != null) {
@@ -515,11 +526,22 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
         return new PropagationInfo(propByRes, propByLinkedAccount);
     }
 
-    protected LinkedAccountTO getLinkedAccountTO(final LinkedAccount account, final boolean returnPasswordValue) {
+    @Transactional
+    @Override
+    public void setMfa(final String username, final Mfa mfa) {
+        User user = userDAO.findByUsername(username).
+                orElseThrow(() -> new NotFoundException("User " + username));
+
+        user.setMfa(mfa);
+        userDAO.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public LinkedAccountTO getLinkedAccountTO(final LinkedAccount account) {
         LinkedAccountTO accountTO = new LinkedAccountTO.Builder(
                 account.getKey(), account.getResource().getKey(), account.getConnObjectKeyValue()).
                 username(account.getUsername()).
-                password(returnPasswordValue ? account.getPassword() : null).
                 suspended(BooleanUtils.isTrue(account.isSuspended())).
                 build();
 
@@ -531,16 +553,7 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
 
     @Transactional(readOnly = true)
     @Override
-    public LinkedAccountTO getLinkedAccountTO(final LinkedAccount account) {
-        return getLinkedAccountTO(account, true);
-    }
-
-    @Transactional(readOnly = true)
-    @Override
     public UserTO getUserTO(final User user, final boolean details) {
-        Boolean returnPasswordValue = confParamOps.get(AuthContextUtils.getDomain(),
-                "return.password.value", Boolean.FALSE, Boolean.class);
-
         UserTO userTO = new UserTO();
         userTO.setKey(user.getKey());
         userTO.setUsername(user.getUsername());
@@ -548,10 +561,6 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
         userTO.setSuspended(BooleanUtils.isTrue(user.isSuspended()));
         userTO.setMustChangePassword(user.isMustChangePassword());
 
-        if (returnPasswordValue) {
-            userTO.setPassword(user.getPassword());
-            userTO.setSecurityAnswer(user.getSecurityAnswer());
-        }
         Optional.ofNullable(user.getSecurityQuestion()).
                 map(SecurityQuestion::getKey).
                 ifPresent(userTO::setSecurityQuestion);
@@ -567,26 +576,12 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
         userTO.setChangePwdDate(user.getChangePwdDate());
         userTO.setFailedLogins(user.getFailedLogins());
         userTO.setLastLoginDate(user.getLastLoginDate());
-        userTO.setToken(user.getToken());
-        userTO.setTokenExpireTime(user.getTokenExpireTime());
 
-        fillTO(userTO,
-                user.getRealm().getFullPath(),
-                user.getAuxClasses(),
-                user.getPlainAttrs(),
-                derAttrHandler.getValues(user),
-                userDAO.findAllResources(user));
-
-        // dynamic realms
-        userTO.getDynRealms().addAll(userDAO.findDynRealms(user.getKey()));
+        fillTO(user, userTO, derAttrHandler.getValues(user), userDAO.findAllResources(user));
 
         if (details) {
             // roles
             userTO.getRoles().addAll(user.getRoles().stream().map(Role::getKey).toList());
-
-            // dynamic roles
-            userTO.getDynRoles().addAll(
-                    userDAO.findDynRoles(user.getKey()).stream().map(Role::getKey).toList());
 
             // relationships
             userTO.getRelationships().addAll(user.getRelationships().stream().
@@ -602,14 +597,9 @@ public class UserDataBinderImpl extends AnyDataBinder implements UserDataBinder 
                     derAttrHandler.getValues((Groupable<?, ?, ?>) user, membership),
                     membership)).toList());
 
-            // dynamic memberships
-            userTO.getDynMemberships().addAll(userDAO.findDynGroups(user.getKey()).stream().
-                    map(group -> new MembershipTO.Builder(group.getKey()).groupName(group.getName()).build()).
-                    toList());
-
             // linked accounts
-            userTO.getLinkedAccounts().addAll(user.getLinkedAccounts().stream().
-                    map(account -> getLinkedAccountTO(account, returnPasswordValue)).toList());
+            userTO.getLinkedAccounts().addAll(
+                    user.getLinkedAccounts().stream().map(this::getLinkedAccountTO).toList());
 
             // delegations
             userTO.getDelegatingDelegations().addAll(

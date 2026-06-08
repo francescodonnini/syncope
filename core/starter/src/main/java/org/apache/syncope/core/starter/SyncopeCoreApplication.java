@@ -20,7 +20,6 @@ package org.apache.syncope.core.starter;
 
 import java.util.Map;
 import org.apache.cxf.spring.boot.autoconfigure.openapi.OpenApiAutoConfiguration;
-import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
 import org.apache.syncope.common.keymaster.client.api.DomainOps;
 import org.apache.syncope.common.keymaster.client.api.startstop.KeymasterStop;
 import org.apache.syncope.common.lib.info.SystemInfo;
@@ -31,6 +30,7 @@ import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
 import org.apache.syncope.core.persistence.api.dao.EntityCacheDAO;
 import org.apache.syncope.core.persistence.api.dao.ExternalResourceDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
+import org.apache.syncope.core.persistence.api.dao.JobStatusDAO;
 import org.apache.syncope.core.persistence.api.dao.NotificationDAO;
 import org.apache.syncope.core.persistence.api.dao.PersistenceInfoDAO;
 import org.apache.syncope.core.persistence.api.dao.PolicyDAO;
@@ -42,33 +42,27 @@ import org.apache.syncope.core.provisioning.api.ConnIdBundleManager;
 import org.apache.syncope.core.provisioning.api.ConnectorManager;
 import org.apache.syncope.core.provisioning.api.ImplementationLookup;
 import org.apache.syncope.core.provisioning.api.data.ConnInstanceDataBinder;
+import org.apache.syncope.core.provisioning.java.job.SyncopeTaskScheduler;
 import org.apache.syncope.core.starter.actuate.DefaultSyncopeCoreInfoContributor;
 import org.apache.syncope.core.starter.actuate.DomainsHealthIndicator;
 import org.apache.syncope.core.starter.actuate.EntityCacheEndpoint;
 import org.apache.syncope.core.starter.actuate.ExternalResourcesHealthIndicator;
+import org.apache.syncope.core.starter.actuate.JobEndpoint;
 import org.apache.syncope.core.starter.actuate.SyncopeCoreInfoContributor;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.actuate.mail.MailHealthIndicator;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.data.neo4j.Neo4jDataAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.neo4j.Neo4jReactiveDataAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.neo4j.Neo4jReactiveRepositoriesAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.neo4j.Neo4jRepositoriesAutoConfiguration;
-import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration;
-import org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration;
-import org.springframework.boot.autoconfigure.http.HttpMessageConvertersAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration;
 import org.springframework.boot.autoconfigure.task.TaskExecutionAutoConfiguration;
 import org.springframework.boot.autoconfigure.task.TaskSchedulingAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
+import org.springframework.boot.http.converter.autoconfigure.HttpMessageConvertersAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.mail.health.MailHealthIndicator;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.PayloadApplicationEvent;
@@ -80,22 +74,14 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @SpringBootApplication(
         exclude = {
-            ErrorMvcAutoConfiguration.class,
             HttpMessageConvertersAutoConfiguration.class,
             OpenApiAutoConfiguration.class,
             DataSourceAutoConfiguration.class,
             DataSourceTransactionManagerAutoConfiguration.class,
-            SqlInitializationAutoConfiguration.class,
             HibernateJpaAutoConfiguration.class,
             JdbcTemplateAutoConfiguration.class,
-            Neo4jDataAutoConfiguration.class,
-            Neo4jRepositoriesAutoConfiguration.class,
-            Neo4jReactiveDataAutoConfiguration.class,
-            Neo4jReactiveRepositoriesAutoConfiguration.class,
             TaskExecutionAutoConfiguration.class,
-            TaskSchedulingAutoConfiguration.class,
-            ElasticsearchRestClientAutoConfiguration.class,
-            ElasticsearchClientAutoConfiguration.class },
+            TaskSchedulingAutoConfiguration.class },
         proxyBeanMethods = false)
 @EnableTransactionManagement
 @EnableCaching
@@ -145,7 +131,6 @@ public class SyncopeCoreApplication extends SpringBootServletInitializer {
             final TaskDAO taskDAO,
             final SecurityQuestionDAO securityQuestionDAO,
             final PersistenceInfoDAO persistenceInfoDAO,
-            final ConfParamOps confParamOps,
             final ConnIdBundleManager bundleManager,
             final ImplementationLookup implLookup) {
 
@@ -162,7 +147,6 @@ public class SyncopeCoreApplication extends SpringBootServletInitializer {
                 taskDAO,
                 securityQuestionDAO,
                 persistenceInfoDAO,
-                confParamOps,
                 bundleManager,
                 implLookup);
     }
@@ -195,6 +179,12 @@ public class SyncopeCoreApplication extends SpringBootServletInitializer {
     @Bean
     public EntityCacheEndpoint entityCacheEndpoint(final EntityCacheDAO entityCacheDAO) {
         return new EntityCacheEndpoint(entityCacheDAO);
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public JobEndpoint jobEndpoint(final SyncopeTaskScheduler syncopeTaskScheduler, final JobStatusDAO jobStatusDAO) {
+        return new JobEndpoint(syncopeTaskScheduler, jobStatusDAO);
     }
 
     @Bean

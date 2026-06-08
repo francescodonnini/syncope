@@ -41,6 +41,7 @@ import org.apache.syncope.core.persistence.api.entity.task.PullTask;
 import org.apache.syncope.core.provisioning.api.Connector;
 import org.apache.syncope.core.provisioning.api.jexl.TemplateUtils;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.InboundActions;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
 import org.apache.syncope.core.provisioning.api.pushpull.ReconFilterBuilder;
@@ -118,7 +119,7 @@ public class SinglePullJobDelegate extends PullJobDelegate implements SyncopeSin
                     executor,
                     false);
 
-            dispatcher = new PullResultHandlerDispatcher(profile, this);
+            dispatcher = buildDispatcher();
 
             for (InboundActions action : profile.getActions()) {
                 action.beforeAll(profile);
@@ -127,7 +128,6 @@ public class SinglePullJobDelegate extends PullJobDelegate implements SyncopeSin
             AnyType anyType = anyTypeDAO.findById(provision.getAnyType()).
                     orElseThrow(() -> new NotFoundException("AnyType" + provision.getAnyType()));
 
-            ghandler = buildGroupHandler();
             dispatcher.addHandlerSupplier(provision.getObjectClass(), () -> {
                 SyncopePullResultHandler handler;
                 switch (anyType.getKind()) {
@@ -136,7 +136,7 @@ public class SinglePullJobDelegate extends PullJobDelegate implements SyncopeSin
                         break;
 
                     case GROUP:
-                        handler = ghandler;
+                        handler = buildGroupHandler();
                         break;
 
                     case ANY_OBJECT:
@@ -159,10 +159,12 @@ public class SinglePullJobDelegate extends PullJobDelegate implements SyncopeSin
                             MappingUtils.getInboundItems(provision.getMapping().getItems().stream()),
                             matg.toArray(String[]::new)));
 
+            AnyPullResultHandler handler =
+                    (AnyPullResultHandler) dispatcher.nonConcurrentHandler(provision.getObjectClass());
             try {
-                setGroupOwners();
+                handler.setManagers();
             } catch (Exception e) {
-                LOG.error("While setting group owners", e);
+                LOG.error("While setting managers", e);
             }
 
             for (InboundActions action : profile.getActions()) {

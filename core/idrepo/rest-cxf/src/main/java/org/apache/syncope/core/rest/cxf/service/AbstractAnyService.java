@@ -50,25 +50,26 @@ import org.apache.syncope.common.rest.api.batch.BatchResponseItem;
 import org.apache.syncope.common.rest.api.beans.AnyQuery;
 import org.apache.syncope.common.rest.api.service.AnyService;
 import org.apache.syncope.common.rest.api.service.JAXRSService;
-import org.apache.syncope.core.logic.AbstractAnyLogic;
+import org.apache.syncope.core.logic.AnyCRUDLogicOp;
 import org.apache.syncope.core.persistence.api.dao.AnyDAO;
 import org.apache.syncope.core.persistence.api.dao.NotFoundException;
 import org.apache.syncope.core.persistence.api.dao.search.SearchCond;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
 import org.apache.syncope.core.provisioning.api.serialization.POJOHelper;
 import org.apache.syncope.core.spring.security.SecureRandomUtils;
 import org.springframework.data.domain.Page;
 
 public abstract class AbstractAnyService<TO extends AnyTO, CR extends AnyCR, UR extends AnyUR>
-        extends AbstractSearchService implements AnyService<TO> {
+        extends AbstractSearchService<AnySearchCondVisitor>
+        implements AnyService<TO> {
 
-    public AbstractAnyService(final SearchCondVisitor searchCondVisitor) {
+    public AbstractAnyService(final AnySearchCondVisitor searchCondVisitor) {
         super(searchCondVisitor);
     }
 
     protected abstract AnyDAO<?> getAnyDAO();
 
-    protected abstract AbstractAnyLogic<TO, CR, UR> getAnyLogic();
+    protected abstract AnyCRUDLogicOp<TO, CR, UR> getAnyLogic();
 
     protected abstract UR newUpdateReq(String key);
 
@@ -117,7 +118,7 @@ public abstract class AbstractAnyService<TO extends AnyTO, CR extends AnyCR, UR 
         String realm = Strings.CS.prependIfMissing(anyQuery.getRealm(), SyncopeConstants.ROOT_REALM);
         SearchCond searchCond = StringUtils.isBlank(anyQuery.getFiql())
                 ? null
-                : getSearchCond(anyQuery.getFiql(), realm);
+                : getSearchCond(anyQuery.getFiql());
         try {
             Page<TO> result = getAnyLogic().search(
                     searchCond,

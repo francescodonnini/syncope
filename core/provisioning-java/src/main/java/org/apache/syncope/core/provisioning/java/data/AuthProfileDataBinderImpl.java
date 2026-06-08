@@ -33,15 +33,16 @@ public class AuthProfileDataBinderImpl implements AuthProfileDataBinder {
 
     @Override
     public AuthProfileTO getAuthProfileTO(final AuthProfile authProfile) {
-        AuthProfileTO authProfileTO = new AuthProfileTO();
-        authProfileTO.setKey(authProfile.getKey());
-        authProfileTO.setOwner(authProfile.getOwner());
-        authProfileTO.getImpersonationAccounts().addAll(authProfile.getImpersonationAccounts());
-        authProfileTO.getGoogleMfaAuthTokens().addAll(authProfile.getGoogleMfaAuthTokens());
-        authProfileTO.getGoogleMfaAuthAccounts().addAll(authProfile.getGoogleMfaAuthAccounts());
-        authProfileTO.getMfaTrustedDevices().addAll(authProfile.getMfaTrustedDevices());
-        authProfileTO.getWebAuthnDeviceCredentials().addAll(authProfile.getWebAuthnDeviceCredentials());
-        return authProfileTO;
+        return new AuthProfileTO.Builder().
+                key(authProfile.getKey()).
+                owner(authProfile.getOwner()).
+                impersonationAccounts(authProfile.getImpersonationAccounts()).
+                googleMfaAuthTokens(authProfile.getGoogleMfaAuthTokens()).
+                googleMfaAuthAccounts(authProfile.getGoogleMfaAuthAccounts()).
+                mfaTrustedDevices(authProfile.getMfaTrustedDevices()).
+                webAuthnDeviceCredentials(authProfile.getWebAuthnDeviceCredentials()).
+                consentDecisions(authProfile.getConsentDecisions()).
+                build();
     }
 
     @Override
@@ -53,11 +54,18 @@ public class AuthProfileDataBinderImpl implements AuthProfileDataBinder {
 
     @Override
     public AuthProfile update(final AuthProfile authProfile, final AuthProfileTO authProfileTO) {
-        authProfile.setImpersonationAccounts(authProfileTO.getImpersonationAccounts());
-        authProfile.setGoogleMfaAuthTokens(authProfileTO.getGoogleMfaAuthTokens());
-        authProfile.setGoogleMfaAuthAccounts(authProfileTO.getGoogleMfaAuthAccounts());
-        authProfile.setMfaTrustedDevices(authProfileTO.getMfaTrustedDevices());
-        authProfile.setWebAuthnDeviceCredentials(authProfileTO.getWebAuthnDeviceCredentials());
+        authProfile.getImpersonationAccounts().clear();
+        authProfileTO.getImpersonationAccounts().forEach(authProfile::add);
+        authProfile.getGoogleMfaAuthTokens().clear();
+        authProfileTO.getGoogleMfaAuthTokens().forEach(authProfile::add);
+        authProfile.getGoogleMfaAuthAccounts().clear();
+        authProfileTO.getGoogleMfaAuthAccounts().forEach(authProfile::add);
+        authProfile.getMfaTrustedDevices().clear();
+        authProfileTO.getMfaTrustedDevices().forEach(authProfile::add);
+        authProfile.getWebAuthnDeviceCredentials().clear();
+        authProfileTO.getWebAuthnDeviceCredentials().forEach(authProfile::add);
+        authProfile.getConsentDecisions().clear();
+        authProfileTO.getConsentDecisions().forEach(authProfile::add);
         return authProfile;
     }
 }

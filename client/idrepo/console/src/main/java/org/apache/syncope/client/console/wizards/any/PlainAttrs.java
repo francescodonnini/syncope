@@ -21,6 +21,7 @@ package org.apache.syncope.client.console.wizards.any;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -36,6 +37,7 @@ import org.apache.syncope.common.lib.to.GroupTO;
 import org.apache.syncope.common.lib.to.GroupableRelatableTO;
 import org.apache.syncope.common.lib.to.MembershipTO;
 import org.apache.syncope.common.lib.to.PlainSchemaTO;
+import org.apache.syncope.common.lib.to.RelatableTO;
 import org.apache.syncope.common.lib.to.RelationshipTO;
 import org.apache.syncope.common.lib.to.UserTO;
 import org.apache.syncope.common.lib.types.AttrSchemaType;
@@ -186,15 +188,15 @@ public class PlainAttrs extends AbstractAttrs<PlainSchemaTO> {
         Map<String, Attr> attrMap = EntityTOUtils.buildAttrMap(attributable.getPlainAttrs());
 
         List<Attr> plainAttrs = schemas.values().stream().map(schema -> {
-            Attr attr = new Attr();
-            attr.setSchema(schema.getKey());
-            if (attrMap.get(schema.getKey()) == null || attrMap.get(schema.getKey()).getValues().isEmpty()) {
-                if (schema.getType() != AttrSchemaType.Dropdown || !schema.isMultivalue()) {
-                    attr.getValues().add(StringUtils.EMPTY);
-                }
-            } else {
-                attr = attrMap.get(schema.getKey());
+            Attr attr = Optional.ofNullable(attrMap.get(schema.getKey())).orElseGet(() -> {
+                Attr newAttr = new Attr();
+                newAttr.setSchema(schema.getKey());
+                return newAttr;
+            });
+            if ((schema.getType() != AttrSchemaType.Dropdown || !schema.isMultivalue()) && attr.getValues().isEmpty()) {
+                attr.getValues().add(StringUtils.EMPTY);
             }
+
             return attr;
         }).toList();
 
@@ -228,7 +230,7 @@ public class PlainAttrs extends AbstractAttrs<PlainSchemaTO> {
 
     @Override
     protected void setAttrs(final RelationshipTO relationshipTO) {
-        Map<String, Attr> attrMap = GroupableRelatableTO.class.cast(attributable).
+        Map<String, Attr> attrMap = RelatableTO.class.cast(attributable).
                 getRelationship(relationshipTO.getType(), relationshipTO.getOtherEndKey()).
                 map(gr -> EntityTOUtils.buildAttrMap(gr.getPlainAttrs())).
                 orElseGet(HashMap::new);

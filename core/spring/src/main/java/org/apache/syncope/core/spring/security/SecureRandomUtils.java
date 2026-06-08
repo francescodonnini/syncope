@@ -21,15 +21,15 @@ package org.apache.syncope.core.spring.security;
 import com.fasterxml.uuid.Generators;
 import com.fasterxml.uuid.NoArgGenerator;
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.UUID;
 import org.apache.commons.text.RandomStringGenerator;
-import org.passay.PasswordGenerator;
+import org.passay.generate.PasswordGenerator;
+import org.passay.rule.Rule;
 
 public final class SecureRandomUtils {
 
     private static final SecureRandom RANDOM = new SecureRandom();
-
-    private static final PasswordGenerator PASSWORD_GENERATOR = new PasswordGenerator(RANDOM);
 
     private static final RandomStringGenerator FOR_PASSWORD = new RandomStringGenerator.Builder().
             usingRandom(RANDOM::nextInt).
@@ -78,16 +78,20 @@ public final class SecureRandomUtils {
                 }).get().generate(1);
     }
 
-    public static int generateRandomInt(final int startInclusive, final int endExclusive) {
-        return startInclusive + RANDOM.nextInt(endExclusive - startInclusive);
+    public static int generateRandomInt(final int origin, final int bound) {
+        return origin + RANDOM.nextInt(origin, bound);
+    }
+
+    public static long generateRandomLong(final int origin, final int bound) {
+        return origin + RANDOM.nextLong(origin, bound);
     }
 
     public static UUID generateRandomUUID() {
         return UUID_GENERATOR.generate();
     }
 
-    public static PasswordGenerator passwordGenerator() {
-        return PASSWORD_GENERATOR;
+    public static PasswordGenerator passwordGenerator(final int length, final List<? extends Rule> rules) {
+        return new PasswordGenerator(RANDOM, length, 2, rules);
     }
 
     private SecureRandomUtils() {

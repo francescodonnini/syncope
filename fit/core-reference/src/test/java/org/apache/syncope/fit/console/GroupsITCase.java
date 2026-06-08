@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Test;
 
 public class GroupsITCase extends AbstractConsoleITCase {
 
+    private static final String GROUP_TAB =
+            "body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link";
+
     private static final String TAB_PANEL = "body:content:body:container:content:tabbedPanel:panel:searchResult:";
 
     private static final String CONTAINER = TAB_PANEL + "container:content:";
@@ -44,8 +47,8 @@ public class GroupsITCase extends AbstractConsoleITCase {
 
     @Test
     public void read() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(GROUP_TAB);
 
         Component component = findComponentByProp("name", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "artDirector");
@@ -74,8 +77,8 @@ public class GroupsITCase extends AbstractConsoleITCase {
 
     @Test
     public void filteredSearch() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(GROUP_TAB);
 
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:accordionPanel:tabs:0:title");
@@ -92,8 +95,8 @@ public class GroupsITCase extends AbstractConsoleITCase {
     }
 
     private static void cloneGroup(final String group) {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(GROUP_TAB);
 
         Component component = findComponentByProp("name", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", group);
@@ -164,44 +167,30 @@ public class GroupsITCase extends AbstractConsoleITCase {
                 + "outerObjectsRepeater:0:outer:form:content:form:view:name:textField",
                 TextField.class);
 
-        FormTester formTester = TESTER.newFormTester(TAB_PANEL
-                + "outerObjectsRepeater:0:outer:form:content:form");
-        assertNotNull(formTester);
-        formTester.submit("buttons:next");
+        FormTester formTester;
+        for (int i = 0; i < 5; i++) {
+            formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
+            assertNotNull(formTester);
+            formTester.submit("buttons:next");
+        }
 
         // -------------------------
         // SYNCOPE-1026
         // -------------------------
         assertEquals(TESTER.getComponentFromLastRenderedPage(
                 "body:content:body:container:content:tabbedPanel:panel:"
-                + "searchResult:outerObjectsRepeater:0:outer:form:content:form:view:ownerContainer:search:userOwner:"
+                + "searchResult:outerObjectsRepeater:0:outer:form:content:form:view:managerContainer:search:uManager:"
                 + "textField").getDefaultModelObjectAsString(), "[823074dc-d280-436d-a7dd-07399fae48ec] puccini");
 
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:searchResult:outerObjectsRepeater:0:"
-                + "outer:form:content:form:view:ownerContainer:search:userOwnerReset");
+                + "outer:form:content:form:view:managerContainer:search:uManagerReset");
 
         assertEquals(TESTER.getComponentFromLastRenderedPage(
                 "body:content:body:container:content:tabbedPanel:panel:"
-                + "searchResult:outerObjectsRepeater:0:outer:form:content:form:view:ownerContainer:search:userOwner:"
+                + "searchResult:outerObjectsRepeater:0:outer:form:content:form:view:managerContainer:search:uManager:"
                 + "textField").getDefaultModelObjectAsString(), StringUtils.EMPTY);
         // -------------------------
-
-        formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
-        assertNotNull(formTester);
-        formTester.submit("buttons:next");
-
-        formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
-        assertNotNull(formTester);
-        formTester.submit("buttons:next");
-
-        formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
-        assertNotNull(formTester);
-        formTester.submit("buttons:next");
-
-        formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
-        assertNotNull(formTester);
-        formTester.submit("buttons:next");
 
         formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
         assertNotNull(formTester);
@@ -241,8 +230,8 @@ public class GroupsITCase extends AbstractConsoleITCase {
 
     @Test
     public void checkDeleteGroupLink() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(GROUP_TAB);
 
         Component component = findComponentByProp("name", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "director");

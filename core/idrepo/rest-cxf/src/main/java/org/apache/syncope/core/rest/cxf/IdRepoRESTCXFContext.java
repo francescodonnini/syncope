@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.rest.cxf;
 
-import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import jakarta.validation.Validator;
 import java.util.HashMap;
@@ -51,12 +50,12 @@ import org.apache.syncope.common.rest.api.service.AnyTypeService;
 import org.apache.syncope.common.rest.api.service.AuditService;
 import org.apache.syncope.common.rest.api.service.CommandService;
 import org.apache.syncope.common.rest.api.service.DelegationService;
-import org.apache.syncope.common.rest.api.service.DynRealmService;
 import org.apache.syncope.common.rest.api.service.FIQLQueryService;
 import org.apache.syncope.common.rest.api.service.GroupService;
 import org.apache.syncope.common.rest.api.service.ImplementationService;
 import org.apache.syncope.common.rest.api.service.JAXRSService;
 import org.apache.syncope.common.rest.api.service.MailTemplateService;
+import org.apache.syncope.common.rest.api.service.MfaService;
 import org.apache.syncope.common.rest.api.service.NotificationService;
 import org.apache.syncope.common.rest.api.service.PolicyService;
 import org.apache.syncope.common.rest.api.service.RealmService;
@@ -70,17 +69,17 @@ import org.apache.syncope.common.rest.api.service.TaskService;
 import org.apache.syncope.common.rest.api.service.UserSelfService;
 import org.apache.syncope.common.rest.api.service.UserService;
 import org.apache.syncope.core.logic.AccessTokenLogic;
-import org.apache.syncope.core.logic.AnyObjectLogic;
+import org.apache.syncope.core.logic.AnyObjectLogicOp;
 import org.apache.syncope.core.logic.AnyTypeClassLogic;
 import org.apache.syncope.core.logic.AnyTypeLogic;
 import org.apache.syncope.core.logic.AuditLogic;
 import org.apache.syncope.core.logic.CommandLogic;
 import org.apache.syncope.core.logic.DelegationLogic;
-import org.apache.syncope.core.logic.DynRealmLogic;
 import org.apache.syncope.core.logic.FIQLQueryLogic;
-import org.apache.syncope.core.logic.GroupLogic;
+import org.apache.syncope.core.logic.GroupLogicOp;
 import org.apache.syncope.core.logic.ImplementationLogic;
 import org.apache.syncope.core.logic.MailTemplateLogic;
+import org.apache.syncope.core.logic.MfaLogic;
 import org.apache.syncope.core.logic.NotificationLogic;
 import org.apache.syncope.core.logic.PolicyLogic;
 import org.apache.syncope.core.logic.RealmLogic;
@@ -91,14 +90,16 @@ import org.apache.syncope.core.logic.SchemaLogic;
 import org.apache.syncope.core.logic.SecurityQuestionLogic;
 import org.apache.syncope.core.logic.SyncopeLogic;
 import org.apache.syncope.core.logic.TaskLogic;
-import org.apache.syncope.core.logic.UserLogic;
+import org.apache.syncope.core.logic.UserLogicOp;
+import org.apache.syncope.core.logic.UserSelfLogic;
 import org.apache.syncope.core.persistence.api.DomainHolder;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.BatchDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.UserDAO;
 import org.apache.syncope.core.persistence.api.entity.EntityFactory;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
+import org.apache.syncope.core.persistence.api.search.RealmSearchCondVisitor;
 import org.apache.syncope.core.rest.cxf.service.AccessTokenServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.AnyObjectServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.AnyTypeClassServiceImpl;
@@ -106,11 +107,11 @@ import org.apache.syncope.core.rest.cxf.service.AnyTypeServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.AuditServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.CommandServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.DelegationServiceImpl;
-import org.apache.syncope.core.rest.cxf.service.DynRealmServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.FIQLQueryServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.GroupServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.ImplementationServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.MailTemplateServiceImpl;
+import org.apache.syncope.core.rest.cxf.service.MfaServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.NotificationServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.PolicyServiceImpl;
 import org.apache.syncope.core.rest.cxf.service.RealmServiceImpl;
@@ -129,11 +130,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.env.Environment;
 import org.springframework.core.task.AsyncTaskExecutor;
+import tools.jackson.jakarta.rs.json.JacksonJsonProvider;
 
 @PropertySource("classpath:errorMessages.properties")
 @EnableConfigurationProperties(RESTProperties.class)
@@ -325,8 +328,11 @@ public class IdRepoRESTCXFContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public AnyObjectService anyObjectService(final AnyObjectDAO anyObjectDAO, final AnyObjectLogic anyObjectLogic,
-            final SearchCondVisitor searchCondVisitor) {
+    public AnyObjectService anyObjectService(
+            final AnyObjectDAO anyObjectDAO,
+            final AnyObjectLogicOp anyObjectLogic,
+            final AnySearchCondVisitor searchCondVisitor) {
+
         return new AnyObjectServiceImpl(searchCondVisitor, anyObjectDAO, anyObjectLogic);
     }
 
@@ -368,14 +374,11 @@ public class IdRepoRESTCXFContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public DynRealmService dynRealmService(final DynRealmLogic dynRealmLogic) {
-        return new DynRealmServiceImpl(dynRealmLogic);
-    }
+    public GroupService groupService(
+            final GroupDAO groupDAO,
+            final GroupLogicOp groupLogic,
+            final AnySearchCondVisitor searchCondVisitor) {
 
-    @ConditionalOnMissingBean
-    @Bean
-    public GroupService groupService(final GroupDAO groupDAO, final GroupLogic groupLogic,
-            final SearchCondVisitor searchCondVisitor) {
         return new GroupServiceImpl(searchCondVisitor, groupDAO, groupLogic);
     }
 
@@ -405,8 +408,8 @@ public class IdRepoRESTCXFContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public RealmService realmService(final RealmLogic realmLogic) {
-        return new RealmServiceImpl(realmLogic);
+    public RealmService realmService(final RealmLogic realmLogic, final RealmSearchCondVisitor searchCondVisitor) {
+        return new RealmServiceImpl(realmLogic, searchCondVisitor);
     }
 
     @ConditionalOnMissingBean
@@ -447,9 +450,10 @@ public class IdRepoRESTCXFContext {
             @Qualifier("batchExecutor")
             final AsyncTaskExecutor batchExecutor,
             final BatchDAO batchDAO,
-            final EntityFactory entityFactory) {
+            final EntityFactory entityFactory,
+            final ConfigurableApplicationContext ctx) {
 
-        return new SyncopeServiceImpl(syncopeLogic, batchExecutor, bus, batchDAO, entityFactory);
+        return new SyncopeServiceImpl(syncopeLogic, batchExecutor, bus, batchDAO, entityFactory, ctx);
     }
 
     @ConditionalOnMissingBean
@@ -460,18 +464,23 @@ public class IdRepoRESTCXFContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public UserSelfService userSelfService(final UserLogic userLogic, final SyncopeLogic syncopeLogic) {
-        return new UserSelfServiceImpl(userLogic, syncopeLogic);
+    public UserService userService(
+            final UserDAO userDAO,
+            final UserLogicOp userLogic,
+            final AnySearchCondVisitor searchCondVisitor) {
+
+        return new UserServiceImpl(searchCondVisitor, userDAO, userLogic);
     }
 
     @ConditionalOnMissingBean
     @Bean
-    public UserService userService(
-            final UserDAO userDAO,
-            final UserLogic userLogic,
-            final SyncopeLogic syncopeLogic,
-            final SearchCondVisitor searchCondVisitor) {
+    public UserSelfService userSelfService(final UserSelfLogic userSelfLogic) {
+        return new UserSelfServiceImpl(userSelfLogic);
+    }
 
-        return new UserServiceImpl(searchCondVisitor, userDAO, userLogic, syncopeLogic);
+    @ConditionalOnMissingBean
+    @Bean
+    public MfaService mfaService(final MfaLogic mfaLogic) {
+        return new MfaServiceImpl(mfaLogic);
     }
 }

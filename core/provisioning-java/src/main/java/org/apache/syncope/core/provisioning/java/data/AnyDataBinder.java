@@ -51,6 +51,7 @@ import org.apache.syncope.common.lib.types.PatchOperation;
 import org.apache.syncope.common.lib.types.ResourceOperation;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AllowedSchemas;
+import org.apache.syncope.core.persistence.api.dao.AnyChecker;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeClassDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
@@ -95,18 +96,19 @@ import org.identityconnectors.framework.common.objects.Uid;
 abstract class AnyDataBinder extends AttributableDataBinder {
 
     protected static void fillTO(
+            final Any any,
             final AnyTO anyTO,
-            final String realmFullPath,
-            final Collection<? extends AnyTypeClass> auxClasses,
-            final Collection<PlainAttr> plainAttrs,
             final Map<String, String> derAttrs,
             final Collection<? extends ExternalResource> resources) {
 
-        anyTO.setRealm(realmFullPath);
+        anyTO.setRealm(any.getRealm().getFullPath());
 
-        anyTO.getAuxClasses().addAll(auxClasses.stream().map(AnyTypeClass::getKey).toList());
+        Optional.ofNullable(any.getUManager()).map(User::getKey).ifPresent(anyTO::setUManager);
+        Optional.ofNullable(any.getGManager()).map(Group::getKey).ifPresent(anyTO::setGManager);
 
-        plainAttrs.forEach(plainAttr -> anyTO.getPlainAttrs().
+        anyTO.getAuxClasses().addAll(any.getAuxClasses().stream().map(AnyTypeClass::getKey).toList());
+
+        any.getPlainAttrs().forEach(plainAttr -> anyTO.getPlainAttrs().
                 add(new Attr.Builder(plainAttr.getSchema()).values(plainAttr.getValuesAsStrings()).build()));
 
         derAttrs.forEach((schema, value) -> anyTO.getDerAttrs().
@@ -174,6 +176,8 @@ abstract class AnyDataBinder extends AttributableDataBinder {
 
     protected final RelationshipTypeDAO relationshipTypeDAO;
 
+    protected final AnyChecker anyChecker;
+
     protected final EntityFactory entityFactory;
 
     protected final AnyUtilsFactory anyUtilsFactory;
@@ -190,6 +194,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final EntityFactory entityFactory,
             final AnyUtilsFactory anyUtilsFactory,
             final DerAttrHandler derAttrHandler,
@@ -208,6 +213,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
         this.groupDAO = groupDAO;
         this.resourceDAO = resourceDAO;
         this.relationshipTypeDAO = relationshipTypeDAO;
+        this.anyChecker = anyChecker;
         this.entityFactory = entityFactory;
         this.anyUtilsFactory = anyUtilsFactory;
         this.outboundMatcher = outboundMatcher;
@@ -313,11 +319,11 @@ abstract class AnyDataBinder extends AttributableDataBinder {
         return reqValMissing;
     }
 
-    protected SyncopeClientException checkMandatory(final Any any, final AnyUtils anyUtils) {
+    protected SyncopeClientException checkMandatory(final Any any) {
         SyncopeClientException reqValMissing = SyncopeClientException.build(ClientExceptionType.RequiredValuesMissing);
 
         // Check if there is some mandatory schema defined for which no value has been provided
-        AllowedSchemas<PlainSchema> allowedPlainSchemas = anyUtils.dao().findAllowedSchemas(any, PlainSchema.class);
+        AllowedSchemas<PlainSchema> allowedPlainSchemas = anyChecker.findAllowedSchemas(any, PlainSchema.class);
         allowedPlainSchemas.self().forEach(schema -> checkMandatory(
                 schema, any.getPlainAttr(schema.getKey()).orElse(null), any, reqValMissing));
         if (any instanceof Groupable<?, ?, ?> groupable) {
@@ -389,7 +395,26 @@ abstract class AnyDataBinder extends AttributableDataBinder {
         }
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
+    protected void processAuxClasses(final Relatable<?, ?> any, final AnyUR anyUR) {
+        anyUR.getAuxClasses().forEach(patch -> anyTypeClassDAO.findById(patch.getValue()).ifPresentOrElse(
+                auxClass -> {
+                    switch (patch.getOperation()) {
+                        case ADD_REPLACE:
+                            any.add(auxClass);
+                            break;
+
+                        case DELETE:
+                        default:
+                            if (any.getAuxClasses().remove(auxClass)) {
+                                auxClass.getPlainSchemas().
+                                        forEach(schema -> any.getPlainAttr(schema.getKey()).ifPresent(any::remove));
+                            }
+                    }
+                },
+                () -> LOG.debug("Invalid {} {}, ignoring...",
+                        AnyTypeClass.class.getSimpleName(), patch.getValue())));
+    }
+
     protected void fill(
             final AnyTO anyTO,
             final Relatable<?, ?> any,
@@ -398,25 +423,47 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             final AnyUtils anyUtils,
             final SyncopeClientCompositeException scce) {
 
-        // 1. anyTypeClasses
-        for (StringPatchItem patch : anyUR.getAuxClasses()) {
-            anyTypeClassDAO.findById(patch.getValue()).ifPresentOrElse(
-                    auxClass -> {
-                        switch (patch.getOperation()) {
-                            case ADD_REPLACE:
-                                any.add(auxClass);
-                                break;
-
-                            case DELETE:
-                            default:
-                                any.getAuxClasses().remove(auxClass);
-                        }
-                    },
-                    () -> LOG.debug("Invalid {} {}, ignoring...",
-                            AnyTypeClass.class.getSimpleName(), patch.getValue()));
+        // 0. manager
+        PropagationByResource<String> managerPropByRes = new PropagationByResource<>();
+        if (anyUR.getUManager() != null) {
+            if (anyUR.getUManager().getValue() == null) {
+                if (any.getUManager() != null) {
+                    any.setUManager(null);
+                    managerPropByRes.addAll(ResourceOperation.UPDATE, anyUtils.dao().findAllResourceKeys(any.getKey()));
+                }
+            } else {
+                User manager = userDAO.findById(anyUR.getUManager().getValue()).orElse(null);
+                if (manager == null) {
+                    LOG.debug("Unable to find user manager for {} {} by key {}",
+                            any.getKey(), anyUtils.anyTypeKind(), anyUR.getUManager().getValue());
+                    any.setUManager(null);
+                } else {
+                    any.setUManager(manager);
+                    managerPropByRes.addAll(ResourceOperation.UPDATE, anyUtils.dao().findAllResourceKeys(any.getKey()));
+                }
+            }
         }
+        if (anyUR.getGManager() != null) {
+            if (anyUR.getGManager().getValue() == null) {
+                if (any.getGManager() != null) {
+                    any.setGManager(null);
+                    managerPropByRes.addAll(ResourceOperation.UPDATE, anyUtils.dao().findAllResourceKeys(any.getKey()));
+                }
+            } else {
+                Group manager = groupDAO.findById(anyUR.getGManager().getValue()).orElse(null);
+                if (manager == null) {
+                    LOG.debug("Unable to find group manager for {} {} by key {}",
+                            any.getKey(), anyUtils.anyTypeKind(), anyUR.getGManager().getValue());
+                    any.setGManager(null);
+                } else {
+                    any.setGManager(manager);
+                    managerPropByRes.addAll(ResourceOperation.UPDATE, anyUtils.dao().findAllResourceKeys(any.getKey()));
+                }
+            }
+        }
+        propByRes.merge(managerPropByRes);
 
-        // 2. relationships
+        // 1. relationships
         Set<Pair<String, String>> relationships = new HashSet<>();
         for (RelationshipUR patch : anyUR.getRelationships().stream().
                 filter(patch -> patch.getType() != null && patch.getOtherEndKey() != null).toList()) {
@@ -476,7 +523,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             }
         }
 
-        // 3. resources
+        // 2. resources
         for (StringPatchItem patch : anyUR.getResources()) {
             resourceDAO.findById(patch.getValue()).ifPresentOrElse(
                     resource -> {
@@ -497,7 +544,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
         Set<ExternalResource> resources = anyUtils.getAllResources(any);
         SyncopeClientException invalidValues = SyncopeClientException.build(ClientExceptionType.InvalidValues);
 
-        // 4. attributes
+        // 3. attributes
         anyUR.getPlainAttrs().stream().filter(patch -> patch.getAttr() != null).
                 forEach(patch -> getPlainSchema(patch.getAttr().getSchema()).ifPresentOrElse(
                 schema -> {
@@ -521,7 +568,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             scce.addException(invalidValues);
         }
 
-        SyncopeClientException reqValMissing = checkMandatory(any, anyUtils);
+        SyncopeClientException reqValMissing = checkMandatory(any);
         if (!reqValMissing.isEmpty()) {
             scce.addException(reqValMissing);
         }
@@ -599,20 +646,27 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             final AnyUtils anyUtils,
             final SyncopeClientCompositeException scce) {
 
-        // 0. aux classes
+        // 0. manager
+        // owner
+        if (anyCR.getUManager() != null) {
+            userDAO.findById(anyCR.getUManager()).ifPresentOrElse(
+                    any::setUManager,
+                    () -> LOG.warn("Ignoring invalid user specified as manager: {}", anyCR.getUManager()));
+        }
+        if (anyCR.getGManager() != null) {
+            groupDAO.findById(anyCR.getGManager()).ifPresentOrElse(
+                    any::setGManager,
+                    () -> LOG.warn("Ignoring invalid group specified as manager: {}", anyCR.getGManager()));
+        }
+
+        // 1. aux classes
         any.getAuxClasses().clear();
         anyCR.getAuxClasses().stream().
                 map(anyTypeClassDAO::findById).
                 flatMap(Optional::stream).
-                forEach(auxClass -> {
-                    if (auxClass == null) {
-                        LOG.debug("Invalid {} {}, ignoring...", AnyTypeClass.class.getSimpleName(), auxClass);
-                    } else {
-                        any.add(auxClass);
-                    }
-                });
+                forEach(any::add);
 
-        // 1. relationships
+        // 2. relationships
         Set<Pair<String, String>> relationships = new HashSet<>();
         anyCR.getRelationships().forEach(relationshipTO -> {
             RelationshipType relationshipType = relationshipTypeDAO.findById(relationshipTO.getType()).orElse(null);
@@ -645,7 +699,7 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             }
         });
 
-        // 2. attributes
+        // 3. attributes
         SyncopeClientException invalidValues = SyncopeClientException.build(ClientExceptionType.InvalidValues);
 
         anyCR.getPlainAttrs().stream().
@@ -668,12 +722,12 @@ abstract class AnyDataBinder extends AttributableDataBinder {
             scce.addException(invalidValues);
         }
 
-        SyncopeClientException requiredValuesMissing = checkMandatory(any, anyUtils);
+        SyncopeClientException requiredValuesMissing = checkMandatory(any);
         if (!requiredValuesMissing.isEmpty()) {
             scce.addException(requiredValuesMissing);
         }
 
-        // 3. resources
+        // 4. resources
         anyCR.getResources().forEach(resource -> resourceDAO.findById(resource).ifPresentOrElse(
                 any::add,
                 () -> LOG.debug("Invalid {} {}, ignoring...", ExternalResource.class.getSimpleName(), resource)));

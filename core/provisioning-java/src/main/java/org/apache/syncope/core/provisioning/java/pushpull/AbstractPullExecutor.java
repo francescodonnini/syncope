@@ -25,40 +25,30 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.syncope.common.lib.types.TaskType;
-import org.apache.syncope.core.persistence.api.ApplicationContextProvider;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
-import org.apache.syncope.core.persistence.api.dao.GroupDAO;
-import org.apache.syncope.core.persistence.api.dao.NotFoundException;
 import org.apache.syncope.core.persistence.api.dao.PlainSchemaDAO;
 import org.apache.syncope.core.persistence.api.entity.Implementation;
-import org.apache.syncope.core.persistence.api.entity.group.Group;
 import org.apache.syncope.core.persistence.api.entity.task.ProvisioningTask;
 import org.apache.syncope.core.persistence.api.entity.task.PullTask;
-import org.apache.syncope.core.persistence.api.entity.user.User;
 import org.apache.syncope.core.provisioning.api.ProvisionSorter;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionContext;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
-import org.apache.syncope.core.provisioning.api.pushpull.AnyObjectPullResultHandler;
-import org.apache.syncope.core.provisioning.api.pushpull.GroupPullResultHandler;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.InboundActions;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
 import org.apache.syncope.core.provisioning.api.pushpull.RealmPullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.SyncopePullExecutor;
-import org.apache.syncope.core.provisioning.api.pushpull.UserPullResultHandler;
 import org.apache.syncope.core.spring.implementation.ImplementationManager;
 import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.SyncToken;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ConfigurableApplicationContext;
 
 abstract class AbstractPullExecutor<T extends ProvisioningTask<T>>
         extends AbstractProvisioningJobDelegate<T>
         implements SyncopePullExecutor {
-
-    @Autowired
-    protected GroupDAO groupDAO;
 
     @Autowired
     protected PlainSchemaDAO plainSchemaDAO;
@@ -68,6 +58,9 @@ abstract class AbstractPullExecutor<T extends ProvisioningTask<T>>
 
     @Autowired
     protected PlainAttrValidationManager validator;
+
+    @Autowired
+    protected ConfigurableApplicationContext ctx;
 
     protected final Map<String, SyncToken> latestSyncTokens = Collections.synchronizedMap(new HashMap<>());
 
@@ -81,22 +74,25 @@ abstract class AbstractPullExecutor<T extends ProvisioningTask<T>>
 
     protected PullResultHandlerDispatcher dispatcher;
 
-    protected GroupPullResultHandler ghandler;
+    protected PullResultHandlerDispatcher buildDispatcher() {
+        return ctx.getBeanFactory().createBean(PullResultHandlerDispatcher.class).
+                init(profile, this);
+    }
 
     protected RealmPullResultHandler buildRealmHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultRealmPullResultHandler.class);
+        return ctx.getBeanFactory().createBean(DefaultRealmPullResultHandler.class);
     }
 
-    protected AnyObjectPullResultHandler buildAnyObjectHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultAnyObjectPullResultHandler.class);
+    protected AnyPullResultHandler buildAnyObjectHandler() {
+        return ctx.getBeanFactory().createBean(DefaultAnyObjectPullResultHandler.class);
     }
 
-    protected UserPullResultHandler buildUserHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultUserPullResultHandler.class);
+    protected AnyPullResultHandler buildUserHandler() {
+        return ctx.getBeanFactory().createBean(DefaultUserPullResultHandler.class);
     }
 
-    protected GroupPullResultHandler buildGroupHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultGroupPullResultHandler.class);
+    protected AnyPullResultHandler buildGroupHandler() {
+        return ctx.getBeanFactory().createBean(DefaultGroupPullResultHandler.class);
     }
 
     protected List<InboundActions> getInboundActions(final List<? extends Implementation> impls) {
@@ -127,32 +123,6 @@ abstract class AbstractPullExecutor<T extends ProvisioningTask<T>>
         provisionSorter = getProvisionSorter(task);
 
         latestSyncTokens.clear();
-    }
-
-    protected void setGroupOwners() {
-        ghandler.getGroupOwnerMap().forEach((groupKey, ownerKey) -> {
-            Group group = groupDAO.findById(groupKey).orElseThrow(() -> new NotFoundException("Group " + groupKey));
-
-            if (StringUtils.isBlank(ownerKey)) {
-                group.setGroupOwner(null);
-                group.setUserOwner(null);
-            } else {
-                inboundMatcher.match(
-                        anyTypeDAO.getUser(),
-                        ownerKey,
-                        profile.getTask().getResource(),
-                        profile.getConnector()).ifPresentOrElse(
-                        userMatch -> group.setUserOwner((User) userMatch.getAny()),
-                        () -> inboundMatcher.match(
-                                anyTypeDAO.getGroup(),
-                                ownerKey,
-                                profile.getTask().getResource(),
-                                profile.getConnector()).
-                                ifPresent(groupMatch -> group.setGroupOwner((Group) groupMatch.getAny())));
-            }
-
-            groupDAO.save(group);
-        });
     }
 
     @Override

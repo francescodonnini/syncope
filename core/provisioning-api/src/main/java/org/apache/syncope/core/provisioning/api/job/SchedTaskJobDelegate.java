@@ -21,7 +21,7 @@ package org.apache.syncope.core.provisioning.api.job;
 import org.apache.syncope.common.lib.types.TaskType;
 
 @FunctionalInterface
-public interface SchedTaskJobDelegate {
+public interface SchedTaskJobDelegate extends JobDelegate {
 
     /**
      * Executes a Job to run the given Task.

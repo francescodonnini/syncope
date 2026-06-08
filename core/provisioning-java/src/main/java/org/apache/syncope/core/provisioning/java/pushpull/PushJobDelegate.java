@@ -30,7 +30,6 @@ import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.to.Provision;
 import org.apache.syncope.common.lib.types.ConflictResolutionAction;
 import org.apache.syncope.common.lib.types.TaskType;
-import org.apache.syncope.core.persistence.api.ApplicationContextProvider;
 import org.apache.syncope.core.persistence.api.dao.AnyDAO;
 import org.apache.syncope.core.persistence.api.dao.AnySearchDAO;
 import org.apache.syncope.core.persistence.api.dao.NotFoundException;
@@ -43,14 +42,13 @@ import org.apache.syncope.core.persistence.api.entity.Implementation;
 import org.apache.syncope.core.persistence.api.entity.Realm;
 import org.apache.syncope.core.persistence.api.entity.policy.PushPolicy;
 import org.apache.syncope.core.persistence.api.entity.task.PushTask;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
 import org.apache.syncope.core.persistence.api.search.SearchCondConverter;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
 import org.apache.syncope.core.provisioning.api.ProvisionSorter;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionContext;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
-import org.apache.syncope.core.provisioning.api.job.StoppableSchedTaskJobDelegate;
-import org.apache.syncope.core.provisioning.api.pushpull.AnyObjectPushResultHandler;
-import org.apache.syncope.core.provisioning.api.pushpull.GroupPushResultHandler;
+import org.apache.syncope.core.provisioning.api.job.StoppableJobDelegate;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPushResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
 import org.apache.syncope.core.provisioning.api.pushpull.PushActions;
 import org.apache.syncope.core.provisioning.api.pushpull.RealmPushResultHandler;
@@ -59,12 +57,12 @@ import org.apache.syncope.core.provisioning.api.pushpull.SyncopePushResultHandle
 import org.apache.syncope.core.provisioning.api.pushpull.UserPushResultHandler;
 import org.apache.syncope.core.spring.implementation.ImplementationManager;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 public class PushJobDelegate
         extends AbstractProvisioningJobDelegate<PushTask>
-        implements SyncopePushExecutor, StoppableSchedTaskJobDelegate {
+        implements SyncopePushExecutor, StoppableJobDelegate {
 
     @Autowired
     protected AnySearchDAO searchDAO;
@@ -73,7 +71,10 @@ public class PushJobDelegate
     protected RealmSearchDAO realmSearchDAO;
 
     @Autowired
-    protected SearchCondVisitor searchCondVisitor;
+    protected AnySearchCondVisitor searchCondVisitor;
+
+    @Autowired
+    protected ConfigurableApplicationContext ctx;
 
     protected ProvisioningProfile<PushTask, PushActions> profile;
 
@@ -112,7 +113,7 @@ public class PushJobDelegate
         boolean result = true;
         for (int i = 0; i < anys.size() && result; i++) {
             try {
-                result = dispatcher.handle(anys.get(i).getType().getKey(), anys.get(i).getKey());
+                result = dispatcher.handle(anys.get(i));
             } catch (Exception e) {
                 LOG.warn("Failure pushing '{}' on '{}'", anys.get(i), resource, e);
                 throw new JobExecutionException("While pushing " + anys.get(i) + " on " + resource, e);
@@ -122,19 +123,19 @@ public class PushJobDelegate
     }
 
     protected RealmPushResultHandler buildRealmHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultRealmPushResultHandler.class);
+        return ctx.getBeanFactory().createBean(DefaultRealmPushResultHandler.class);
     }
 
-    protected AnyObjectPushResultHandler buildAnyObjectHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultAnyObjectPushResultHandler.class);
+    protected AnyPushResultHandler buildAnyObjectHandler() {
+        return ctx.getBeanFactory().createBean(DefaultAnyObjectPushResultHandler.class);
     }
 
     protected UserPushResultHandler buildUserHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultUserPushResultHandler.class);
+        return ctx.getBeanFactory().createBean(DefaultUserPushResultHandler.class);
     }
 
-    protected GroupPushResultHandler buildGroupHandler() {
-        return ApplicationContextProvider.getBeanFactory().createBean(DefaultGroupPushResultHandler.class);
+    protected AnyPushResultHandler buildGroupHandler() {
+        return ctx.getBeanFactory().createBean(DefaultGroupPushResultHandler.class);
     }
 
     protected List<PushActions> getPushActions(final List<? extends Implementation> impls) {
@@ -179,11 +180,16 @@ public class PushJobDelegate
         Optional.ofNullable(dispatcher).ifPresent(PushResultHandlerDispatcher::stop);
     }
 
+    protected PushResultHandlerDispatcher buildDispatcher() {
+        return ctx.getBeanFactory().createBean(PushResultHandlerDispatcher.class).
+                init(profile, this);
+    }
+
     @Override
     protected String doExecute(final JobExecutionContext context) throws JobExecutionException {
         LOG.debug("Executing push on {}", task.getResource());
 
-        dispatcher = new PushResultHandlerDispatcher(profile, this);
+        dispatcher = buildDispatcher();
 
         if (!profile.isDryRun()) {
             for (PushActions action : profile.getActions()) {
@@ -205,12 +211,12 @@ public class PushJobDelegate
 
             // Never push the root realm
             List<Realm> realms = realmSearchDAO.findDescendants(
-                    profile.getTask().getSourceRealm().getFullPath(), null, Pageable.unpaged()).stream().
+                    profile.getTask().getSourceRealm().getFullPath(), null).stream().
                     filter(realm -> realm.getParent() != null).toList();
             boolean result = true;
             for (int i = 0; i < realms.size() && result; i++) {
                 try {
-                    result = dispatcher.handle(SyncopeConstants.REALM_ANYTYPE, realms.get(i).getKey());
+                    result = dispatcher.handle(realms.get(i));
                 } catch (Exception e) {
                     LOG.warn("Failure pushing '{}' on '{}'", realms.get(i), task.getResource(), e);
                     throw new JobExecutionException(
@@ -230,8 +236,6 @@ public class PushJobDelegate
 
             AnyType anyType = anyTypeDAO.findById(provision.getAnyType()).
                     orElseThrow(() -> new NotFoundException("AnyType" + provision.getAnyType()));
-
-            AnyDAO<?> anyDAO = anyUtilsFactory.getInstance(anyType.getKind()).dao();
 
             dispatcher.addHandlerSupplier(provision.getAnyType(), () -> {
                 SyncopePushResultHandler handler;
@@ -254,7 +258,7 @@ public class PushJobDelegate
 
             String filter = task.getFilter(anyType.getKey()).orElse(null);
             SearchCond cond = StringUtils.isBlank(filter)
-                    ? anyDAO.getAllMatchingCond()
+                    ? searchDAO.getAllMatchingCond()
                     : SearchCondConverter.convert(searchCondVisitor, filter);
             long count = searchDAO.count(
                     profile.getTask().getSourceRealm(),

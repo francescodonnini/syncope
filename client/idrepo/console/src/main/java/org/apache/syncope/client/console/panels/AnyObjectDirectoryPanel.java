@@ -20,7 +20,6 @@ package org.apache.syncope.client.console.panels;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.syncope.client.console.SyncopeConsoleSession;
 import org.apache.syncope.client.console.SyncopeWebApplication;
@@ -90,8 +89,8 @@ public class AnyObjectDirectoryPanel extends AnyDirectoryPanel<AnyObjectTO, AnyO
                 target.add(displayAttributeModal.setContent(new AnyObjectDisplayAttributesModalPanel<>(
                         displayAttributeModal,
                         page.getPageReference(),
-                        plainSchemas.stream().map(PlainSchemaTO::getKey).collect(Collectors.toList()),
-                        derSchemas.stream().map(DerSchemaTO::getKey).collect(Collectors.toList()),
+                        plainSchemas.stream().map(PlainSchemaTO::getKey).sorted().toList(),
+                        derSchemas.stream().map(DerSchemaTO::getKey).sorted().toList(),
                         type)));
                 displayAttributeModal.addSubmitButton();
                 displayAttributeModal.header(new ResourceModel("any.attr.display"));
@@ -121,8 +120,8 @@ public class AnyObjectDirectoryPanel extends AnyDirectoryPanel<AnyObjectTO, AnyO
                                 new AnyObjectWrapper(restClient.read(model.getObject().getKey())), target));
             }
         }, ActionType.EDIT,
-                String.format("%s,%s", AnyEntitlement.READ.getFor(type), AnyEntitlement.UPDATE.getFor(type))).
-                setRealms(realm, model.getObject().getDynRealms());
+                "%s,%s".formatted(AnyEntitlement.READ.getFor(type), AnyEntitlement.UPDATE.getFor(type))).
+                setRealm(realm);
 
         if (wizardInModal) {
             SyncopeWebApplication.get().getAnyDirectoryPanelAdditionalActionLinksProvider().get(
@@ -203,8 +202,8 @@ public class AnyObjectDirectoryPanel extends AnyDirectoryPanel<AnyObjectTO, AnyO
                 altDefaultModal.show(true);
             }
         }, ActionType.VIEW_AUDIT_HISTORY,
-                String.format("%s,%s", AnyEntitlement.READ.getFor(type), IdRepoEntitlement.AUDIT_LIST)).
-                setRealms(realm, model.getObject().getDynRealms());
+                "%s,%s".formatted(AnyEntitlement.READ.getFor(type), IdRepoEntitlement.AUDIT_LIST)).
+                setRealm(realm);
 
         panel.add(new ActionLink<>() {
 

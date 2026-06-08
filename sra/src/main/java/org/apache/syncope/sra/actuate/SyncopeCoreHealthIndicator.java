@@ -18,16 +18,16 @@
  */
 package org.apache.syncope.sra.actuate;
 
-import org.apache.syncope.client.lib.AnonymousAuthenticationHandler;
+import org.apache.syncope.client.lib.BasicAuthenticationHandler;
 import org.apache.syncope.client.lib.SyncopeClientFactoryBean;
 import org.apache.syncope.common.keymaster.client.api.ServiceOps;
 import org.apache.syncope.common.keymaster.client.api.model.NetworkService;
 import org.apache.syncope.common.rest.api.service.SRARouteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.health.contributor.Status;
 
 public class SyncopeCoreHealthIndicator implements HealthIndicator {
 
@@ -61,7 +61,7 @@ public class SyncopeCoreHealthIndicator implements HealthIndicator {
                 service = new SyncopeClientFactoryBean().
                         setAddress(serviceOps.get(NetworkService.Type.CORE).getAddress()).
                         setUseCompression(useGZIPCompression).
-                        create(new AnonymousAuthenticationHandler(anonymousUser, anonymousKey)).
+                        create(new BasicAuthenticationHandler(anonymousUser, anonymousKey)).
                         getService(SRARouteService.class);
             }
         }

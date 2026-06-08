@@ -90,8 +90,6 @@ public interface NotificationManager {
             Object output,
             Object... input);
 
-    long getMaxRetries();
-
     /**
      * Set execution state of NotificationTask with provided id.
      *
@@ -103,8 +101,9 @@ public interface NotificationManager {
     /**
      * Store execution of a NotificationTask.
      *
+     * @param taskKey task to be updated
      * @param execution task execution.
      * @return merged task execution.
      */
-    TaskExec<NotificationTask> storeExec(TaskExec<NotificationTask> execution);
+    TaskExec<NotificationTask> storeExec(String taskKey, TaskExec<NotificationTask> execution);
 }

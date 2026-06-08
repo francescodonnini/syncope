@@ -28,16 +28,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.cxf.jaxrs.client.WebClient;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.policy.InboundPolicyTO;
@@ -77,8 +78,24 @@ import org.apache.syncope.fit.core.reference.LinkedAccountSampleInboundCorrelati
 import org.apache.syncope.fit.core.reference.LinkedAccountSampleInboundCorrelationRuleConf;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.ObjectNode;
 
 public class LinkedAccountITCase extends AbstractITCase {
+
+    protected static String getFirstLinkedAccountPassword(final String key) {
+        String response = WebClient.create(
+                StringUtils.substringBeforeLast(ADDRESS, "/")
+                + "/actuator/testSecurity/FIRST_LINKED_ACCOUNT_PASSWORD/" + key,
+                ANONYMOUS_UNAME,
+                ANONYMOUS_KEY,
+                null).
+                accept(MediaType.APPLICATION_JSON).get().readEntity(String.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = MAPPER.readValue(response, Map.class);
+        return payload.isEmpty()
+                ? null
+                : Optional.ofNullable(payload.get("password")).map(Object::toString).orElse(null);
+    }
 
     @Test
     public void createWithLinkedAccountThenUpdateThenRemove() {
@@ -209,10 +226,7 @@ public class LinkedAccountITCase extends AbstractITCase {
 
     @Test
     public void createWithoutLinkedAccountThenAddAndUpdatePassword() {
-        // 1. set the return value parameter to true
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "return.password.value", true);
-
-        // 2. create user without linked account
+        // 1. create user without linked account
         UserCR userCR = UserITCase.getSample(
                 "linkedAccount" + RandomStringUtils.insecure().nextNumeric(5) + "@syncope.apache.org");
         String connObjectKeyValue = "uid=" + userCR.getUsername() + ",ou=People,o=isp";
@@ -221,7 +235,7 @@ public class LinkedAccountITCase extends AbstractITCase {
         assertNotNull(user.getKey());
         assertTrue(user.getLinkedAccounts().isEmpty());
 
-        // 3. add linked account to user without password
+        // 2. add linked account to user without password
         UserUR userUR = new UserUR();
         userUR.setKey(user.getKey());
 
@@ -230,15 +244,15 @@ public class LinkedAccountITCase extends AbstractITCase {
 
         user = updateUser(userUR).getEntity();
         assertEquals(1, user.getLinkedAccounts().size());
-        assertNull(user.getLinkedAccounts().getFirst().getPassword());
+        assertNull(getFirstLinkedAccountPassword(user.getKey()));
 
-        // 4. update linked account with adding a password
+        // 3. update linked account with adding a password
         account.setPassword("Password123");
         userUR = new UserUR();
         userUR.setKey(user.getKey());
         userUR.getLinkedAccounts().add(new LinkedAccountUR.Builder().linkedAccountTO(account).build());
 
-        // 4.1 SYNCOPE-1824 update with a wrong password, a error must be raised
+        // 3.1 SYNCOPE-1824 update with a wrong password, a error must be raised
         account.setPassword("password");
         try {
             updateUser(userUR);
@@ -257,7 +271,7 @@ public class LinkedAccountITCase extends AbstractITCase {
         // set a correct password
         account.setPassword("Password123");
         user = updateUser(userUR).getEntity();
-        assertNotNull(user.getLinkedAccounts().getFirst().getPassword());
+        assertNotNull(getFirstLinkedAccountPassword(user.getKey()));
 
         PagedResult<PropagationTaskTO> tasks = TASK_SERVICE.search(
                 new TaskQuery.Builder(TaskType.PROPAGATION).resource(RESOURCE_NAME_LDAP).
@@ -270,8 +284,8 @@ public class LinkedAccountITCase extends AbstractITCase {
         assertTrue(propagationData.getAttributes().stream().
                 anyMatch(a -> OperationalAttributes.PASSWORD_NAME.equals(a.getName())));
 
-        // 5. update linked account password
-        String beforeUpdatePassword = user.getLinkedAccounts().getFirst().getPassword();
+        // 4. update linked account password
+        String beforeUpdatePassword = getFirstLinkedAccountPassword(user.getKey());
         account.setPassword("Password123Updated");
         userUR = new UserUR();
         userUR.setKey(user.getKey());
@@ -283,8 +297,8 @@ public class LinkedAccountITCase extends AbstractITCase {
 
         userUR.getLinkedAccounts().add(new LinkedAccountUR.Builder().linkedAccountTO(account).build());
         user = updateUser(userUR).getEntity();
-        assertNotNull(user.getLinkedAccounts().getFirst().getPassword());
-        assertNotEquals(beforeUpdatePassword, user.getLinkedAccounts().getFirst().getPassword());
+        assertNotNull(getFirstLinkedAccountPassword(user.getKey()));
+        assertNotEquals(beforeUpdatePassword, getFirstLinkedAccountPassword(user.getKey()));
 
         tasks = TASK_SERVICE.search(
                 new TaskQuery.Builder(TaskType.PROPAGATION).resource(RESOURCE_NAME_LDAP).
@@ -297,16 +311,14 @@ public class LinkedAccountITCase extends AbstractITCase {
         assertTrue(propagationData.getAttributes().stream().
                 anyMatch(a -> OperationalAttributes.PASSWORD_NAME.equals(a.getName())));
 
-        // 6. set linked account password to null
+        // 5. set linked account password to null
         account.setPassword(null);
         userUR = new UserUR();
         userUR.setKey(user.getKey());
 
         userUR.getLinkedAccounts().add(new LinkedAccountUR.Builder().linkedAccountTO(account).build());
         user = updateUser(userUR).getEntity();
-        assertNull(user.getLinkedAccounts().getFirst().getPassword());
-
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "return.password.value", false);
+        assertNull(getFirstLinkedAccountPassword(user.getKey()));
     }
 
     @Test
@@ -314,11 +326,11 @@ public class LinkedAccountITCase extends AbstractITCase {
         assumeFalse(IS_EXT_SEARCH_ENABLED);
 
         // 0a. read configured cipher algorithm in order to be able to restore it at the end of test
-        String origpwdCipherAlgo = confParamOps.get(SyncopeConstants.MASTER_DOMAIN,
-                "password.cipher.algorithm", null, String.class);
+        String origpwdCipherAlgo = confParamOps.get(
+                SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, null, String.class);
 
         // 0b. set AES password cipher algorithm
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", "AES");
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, "AES");
 
         String userKey = null;
         String connObjectKeyValue = UUID.randomUUID().toString();
@@ -393,7 +405,8 @@ public class LinkedAccountITCase extends AbstractITCase {
             assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
         } finally {
             // restore initial cipher algorithm
-            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", origpwdCipherAlgo);
+            confParamOps.set(
+                    SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, origpwdCipherAlgo);
 
             // delete user and accounts
             if (userKey != null) {
@@ -524,36 +537,35 @@ public class LinkedAccountITCase extends AbstractITCase {
             accounts = USER_SERVICE.read("vivaldi").getLinkedAccounts();
             assertEquals(3, accounts.size());
 
-            Optional<LinkedAccountTO> firstAccount = accounts.stream().
+            LinkedAccountTO account1 = accounts.stream().
                     filter(account -> user1Key.equals(account.getConnObjectKeyValue())).
-                    findFirst();
-            assertTrue(firstAccount.isPresent());
-            assertFalse(firstAccount.orElseThrow().isSuspended());
-            assertEquals(RESOURCE_NAME_REST, firstAccount.orElseThrow().getResource());
-            assertEquals("linkedaccount1", firstAccount.orElseThrow().getUsername());
+                    findFirst().orElseThrow();
+            assertFalse(account1.isSuspended());
+            assertEquals(RESOURCE_NAME_REST, account1.getResource());
+            assertEquals("linkedaccount1", account1.getUsername());
             assertEquals(
                     "Pasquale",
-                    firstAccount.orElseThrow().getPlainAttr("firstname").orElseThrow().getValues().getFirst());
+                    account1.getPlainAttr("firstname").orElseThrow().getValues().getFirst());
 
-            Optional<LinkedAccountTO> secondAccount = accounts.stream().
+            LinkedAccountTO account2 = accounts.stream().
                     filter(account -> user2Key.equals(account.getConnObjectKeyValue())).
-                    findFirst();
-            assertTrue(secondAccount.isPresent());
-            assertFalse(secondAccount.orElseThrow().isSuspended());
-            assertEquals(RESOURCE_NAME_REST, secondAccount.orElseThrow().getResource());
-            assertNull(secondAccount.orElseThrow().getUsername());
+                    findFirst().orElseThrow();
+            assertFalse(account2.isSuspended());
+            assertEquals(RESOURCE_NAME_REST, account2.getResource());
+            assertNull(account2.getUsername());
             assertEquals(
                     "Giovannino",
-                    secondAccount.orElseThrow().getPlainAttr("firstname").orElseThrow().getValues().getFirst());
+                    account2.getPlainAttr("firstname").orElseThrow().getValues().getFirst());
 
-            Optional<LinkedAccountTO> thirdAccount = accounts.stream().
+            LinkedAccountTO account3 = accounts.stream().
                     filter(account -> user3Key.equals(account.getConnObjectKeyValue())).
-                    filter(account -> "not.vivaldi".equals(account.getUsername())).
-                    findFirst();
-            assertTrue(thirdAccount.isPresent());
-            assertFalse(thirdAccount.orElseThrow().isSuspended());
-            assertEquals(RESOURCE_NAME_REST, thirdAccount.orElseThrow().getResource());
-            assertEquals("not.vivaldi", thirdAccount.orElseThrow().getUsername());
+                    findFirst().orElseThrow();
+            assertFalse(account3.isSuspended());
+            assertEquals(RESOURCE_NAME_REST, account3.getResource());
+            assertEquals("not.vivaldi", account3.getUsername());
+            assertEquals(
+                    "not.vivaldi@syncope.org",
+                    account3.getPlainAttr("email").orElseThrow().getValues().getFirst());
 
             // 3. update / remove REST users
             response = webClient.path(user1Key).delete();
@@ -579,25 +591,22 @@ public class LinkedAccountITCase extends AbstractITCase {
             accounts = USER_SERVICE.read("vivaldi").getLinkedAccounts();
             assertEquals(2, accounts.size());
 
-            firstAccount = accounts.stream().
+            assertTrue(accounts.stream().
                     filter(account -> user1Key.equals(account.getConnObjectKeyValue())).
-                    findFirst();
-            assertFalse(firstAccount.isPresent());
+                    findFirst().isEmpty());
 
-            secondAccount = accounts.stream().
+            account2 = accounts.stream().
                     filter(account -> user2Key.equals(account.getConnObjectKeyValue())).
-                    findFirst();
-            assertTrue(secondAccount.isPresent());
-            assertFalse(secondAccount.orElseThrow().isSuspended());
-            assertEquals(user2Key, secondAccount.orElseThrow().getConnObjectKeyValue());
-            assertEquals("linkedaccount2", secondAccount.orElseThrow().getUsername());
+                    findFirst().orElseThrow();
+            assertFalse(account2.isSuspended());
+            assertEquals(user2Key, account2.getConnObjectKeyValue());
+            assertEquals("linkedaccount2", account2.getUsername());
 
-            thirdAccount = accounts.stream().
-                    filter(account -> "not.vivaldi".equals(account.getUsername())).
-                    findFirst();
-            assertTrue(thirdAccount.isPresent());
-            assertTrue(thirdAccount.orElseThrow().isSuspended());
-            assertEquals(user3Key, thirdAccount.orElseThrow().getConnObjectKeyValue());
+            account3 = accounts.stream().
+                    filter(account -> user3Key.equals(account.getConnObjectKeyValue())).
+                    findFirst().orElseThrow();
+            assertEquals("not.vivaldi", account3.getUsername());
+            assertTrue(account3.isSuspended());
         } finally {
             // clean up
             UserUR patch = new UserUR();

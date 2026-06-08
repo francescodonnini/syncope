@@ -55,6 +55,7 @@ import org.apache.syncope.core.persistence.neo4j.entity.Neo4jRealm;
 import org.apache.syncope.core.persistence.neo4j.entity.task.AbstractTask;
 import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jAnyTemplatePullTask;
 import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jFormPropertyDef;
+import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jLiveSyncTask;
 import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jMacroTask;
 import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jMacroTaskCommand;
 import org.apache.syncope.core.persistence.neo4j.entity.task.Neo4jNotificationTask;
@@ -98,6 +99,10 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
 
             case PULL:
                 result = Neo4jPullTask.PULL_TASK_EXEC_REL;
+                break;
+
+            case LIVE_SYNC:
+                result = Neo4jLiveSyncTask.LIVE_SYNC_TASK_EXEC_REL;
                 break;
 
             case MACRO:
@@ -168,6 +173,9 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
     public Optional<? extends Task<?>> findById(final String key) {
         Optional<? extends Task<?>> task = findById(TaskType.SCHEDULED, key);
         if (task.isEmpty()) {
+            task = findById(TaskType.LIVE_SYNC, key);
+        }
+        if (task.isEmpty()) {
             task = findById(TaskType.PULL, key);
         }
         if (task.isEmpty()) {
@@ -222,8 +230,7 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <T extends Task<T>> List<T> findToExec(final TaskType type) {
+    public long countToExec(final TaskType type) {
         TaskUtils taskUtils = taskUtilsFactory.getInstance(type);
         StringBuilder query = new StringBuilder("MATCH (n:" + taskUtils.getTaskStorage() + ") WHERE ");
 
@@ -232,7 +239,65 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
         } else {
             query.append("(n)-[:").append(execRelationship(type)).append("]-() ");
         }
-        query.append("RETURN n.id ORDER BY n.id DESC");
+
+        query.append(" RETURN COUNT(DISTINCT n)");
+
+        return neo4jTemplate.count(query.toString());
+    }
+
+    protected String toOrderByStatement(final Stream<Sort.Order> orderByClauses) {
+        StringBuilder subStatement = new StringBuilder();
+        orderByClauses.forEach(clause -> {
+            String field = clause.getProperty().trim();
+            switch (field) {
+                case "latestExecStatus":
+                    field = "status";
+                    break;
+
+                case "start":
+                    field = "startDate";
+                    break;
+
+                case "end":
+                    field = "endDate";
+                    break;
+
+                default:
+            }
+
+            subStatement.append("p.").append(field).append(' ').append(clause.getDirection().name()).append(',');
+        });
+
+        StringBuilder statement = new StringBuilder(" ORDER BY ");
+        if (subStatement.length() == 0) {
+            statement.append("n.id DESC");
+        } else {
+            subStatement.deleteCharAt(subStatement.length() - 1);
+            statement.append(subStatement);
+        }
+
+        return statement.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Task<T>> List<T> findToExec(final TaskType type, final Pageable pageable) {
+        TaskUtils taskUtils = taskUtilsFactory.getInstance(type);
+        StringBuilder query = new StringBuilder("MATCH (n:" + taskUtils.getTaskStorage() + ") WHERE ");
+
+        if (type == TaskType.NOTIFICATION) {
+            query.append("n.executed = false ");
+        } else {
+            query.append("(n)-[:").append(execRelationship(type)).append("]-() ");
+        }
+
+        query.append("RETURN n.id ").
+                append(toOrderByStatement(pageable.getSort().get()));
+
+        if (pageable.isPaged()) {
+            query.append(" SKIP ").append(pageable.getPageSize() * pageable.getPageNumber()).
+                    append(" LIMIT ").append(pageable.getPageSize());
+        }
 
         return toList(neo4jClient.query(query.toString()).fetch().all(),
                 "n.id",
@@ -312,7 +377,7 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
             Stream<String> realmKeys = AuthContextUtils.getAuthorizations().get(IdRepoEntitlement.TASK_LIST).stream().
                     map(realmSearchDAO::findByFullPath).
                     filter(Optional::isPresent).
-                    flatMap(r -> realmSearchDAO.findDescendants(r.get().getFullPath(), null, Pageable.unpaged()).
+                    flatMap(r -> realmSearchDAO.findDescendants(r.get().getFullPath(), null).
                     stream()).
                     map(Realm::getKey).
                     distinct();
@@ -374,46 +439,6 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
         return neo4jTemplate.count(query.toString(), parameters);
     }
 
-    protected String toOrderByStatement(
-            final Class<? extends Task<?>> beanClass,
-            final Stream<Sort.Order> orderByClauses) {
-
-        StringBuilder statement = new StringBuilder();
-
-        statement.append("ORDER BY ");
-
-        StringBuilder subStatement = new StringBuilder();
-        orderByClauses.forEach(clause -> {
-            String field = clause.getProperty().trim();
-            switch (field) {
-                case "latestExecStatus":
-                    field = "status";
-                    break;
-
-                case "start":
-                    field = "startDate";
-                    break;
-
-                case "end":
-                    field = "endDate";
-                    break;
-
-                default:
-            }
-
-            subStatement.append("p.").append(field).append(' ').append(clause.getDirection().name()).append(',');
-        });
-
-        if (subStatement.length() == 0) {
-            statement.append("n.id DESC");
-        } else {
-            subStatement.deleteCharAt(subStatement.length() - 1);
-            statement.append(subStatement);
-        }
-
-        return statement.toString();
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public <T extends Task<T>> List<T> findAll(
@@ -439,7 +464,7 @@ public class Neo4jTaskDAO extends AbstractDAO implements TaskDAO {
 
         query.append(" WITH n ");
 
-        query.append(toOrderByStatement(taskUtils.getTaskEntity(), pageable.getSort().get()));
+        query.append(toOrderByStatement(pageable.getSort().get()));
 
         if (pageable.isPaged()) {
             query.append(" SKIP ").append(pageable.getPageSize() * pageable.getPageNumber()).

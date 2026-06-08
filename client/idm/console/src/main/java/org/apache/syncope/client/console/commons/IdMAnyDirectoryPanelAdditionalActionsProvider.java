@@ -26,7 +26,7 @@ import org.apache.syncope.client.console.PreferenceManager;
 import org.apache.syncope.client.console.SyncopeConsoleSession;
 import org.apache.syncope.client.console.pages.BasePage;
 import org.apache.syncope.client.console.panels.AnyDirectoryPanel;
-import org.apache.syncope.client.console.panels.DisplayAttributesModalPanel;
+import org.apache.syncope.client.console.panels.AnyDisplayAttributesModalPanel;
 import org.apache.syncope.client.console.rest.BaseRestClient;
 import org.apache.syncope.client.console.rest.ImplementationRestClient;
 import org.apache.syncope.client.console.rest.ReconciliationRestClient;
@@ -164,7 +164,7 @@ public class IdMAnyDirectoryPanelAdditionalActionsProvider implements AnyDirecto
         };
         csvPushLink.setOutputMarkupPlaceholderTag(true).setVisible(wizardInModal).setEnabled(wizardInModal);
         MetaDataRoleAuthorizationStrategy.authorize(csvPushLink, Component.RENDER,
-                String.format("%s,%s", IdRepoEntitlement.IMPLEMENTATION_LIST, IdRepoEntitlement.TASK_EXECUTE));
+                "%s,%s".formatted(IdRepoEntitlement.IMPLEMENTATION_LIST, IdRepoEntitlement.TASK_EXECUTE));
         panel.addInnerObject(csvPushLink.setOutputMarkupId(true).setOutputMarkupPlaceholderTag(true));
         csvPullLink = new AjaxLink<>("csvPull") {
 
@@ -185,7 +185,7 @@ public class IdMAnyDirectoryPanelAdditionalActionsProvider implements AnyDirecto
         };
         csvPullLink.setOutputMarkupPlaceholderTag(true).setVisible(wizardInModal).setEnabled(wizardInModal);
         MetaDataRoleAuthorizationStrategy.authorize(csvPullLink, Component.RENDER,
-                String.format("%s,%s", IdRepoEntitlement.IMPLEMENTATION_LIST, IdRepoEntitlement.TASK_EXECUTE));
+                "%s,%s".formatted(IdRepoEntitlement.IMPLEMENTATION_LIST, IdRepoEntitlement.TASK_EXECUTE));
         panel.addInnerObject(csvPullLink.setOutputMarkupId(true).setOutputMarkupPlaceholderTag(true));
     }
 
@@ -195,11 +195,11 @@ public class IdMAnyDirectoryPanelAdditionalActionsProvider implements AnyDirecto
             final List<String> dSchemaNames) {
 
         return new CSVPushSpec.Builder(type).
-                fields(PreferenceManager.getList(DisplayAttributesModalPanel.getPrefDetailView(type)).
+                fields(PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefDetailView(type)).
                         stream().filter(name -> !Constants.KEY_FIELD_NAME.equalsIgnoreCase(name)).toList()).
-                plainAttrs(PreferenceManager.getList(DisplayAttributesModalPanel.getPrefPlainAttributeView(type)).
+                plainAttrs(PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefPlainAttributeView(type)).
                         stream().filter(pSchemaNames::contains).toList()).
-                derAttrs(PreferenceManager.getList(DisplayAttributesModalPanel.getPrefPlainAttributeView(type)).
+                derAttrs(PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefPlainAttributeView(type)).
                         stream().filter(dSchemaNames::contains).toList()).
                 build();
     }

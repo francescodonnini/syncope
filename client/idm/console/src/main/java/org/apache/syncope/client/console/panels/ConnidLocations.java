@@ -23,12 +23,11 @@ import java.io.Serializable;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.syncope.client.console.SyncopeConsoleSession;
 import org.apache.syncope.client.console.commons.DirectoryDataProvider;
-import org.apache.syncope.client.console.commons.IdRepoConstants;
+import org.apache.syncope.client.console.commons.IdMConstants;
 import org.apache.syncope.client.console.rest.ConnectorRestClient;
 import org.apache.syncope.client.console.wicket.markup.html.bootstrap.dialog.BaseModal;
 import org.apache.syncope.client.console.wicket.markup.html.form.ActionLink;
@@ -78,7 +77,7 @@ public class ConnidLocations extends
 
     @Override
     protected String paginatorRowsKey() {
-        return IdRepoConstants.PREF_DYNREALM_PAGINATOR_ROWS;
+        return IdMConstants.PREF_CONNID_LOCATIONS_PAGINATOR_ROWS;
     }
 
     @Override
@@ -124,14 +123,14 @@ public class ConnidLocations extends
                 modal.show(true);
             }
 
-        }, ActionLink.ActionType.CREATE, String.format("%s", IdMEntitlement.CONNECTOR_CREATE));
+        }, ActionLink.ActionType.CREATE, "%s".formatted(IdMEntitlement.CONNECTOR_CREATE));
 
         return panel;
     }
 
     @Override
     protected Collection<ActionLink.ActionType> getBatches() {
-        return Collections.emptyList();
+        return List.of();
     }
 
     protected static class ConnidLocationsDataProvider extends DirectoryDataProvider<Serializable> {
@@ -144,13 +143,13 @@ public class ConnidLocations extends
 
         @Override
         public Iterator<String> iterator(final long first, final long count) {
-            List<String> result = new ArrayList<>(SyncopeConsoleSession.get().getPlatformInfo().getConnIdLocations());
+            List<String> result = new ArrayList<>(SyncopeConsoleSession.get().getPlatformInfo().connIdLocations());
             return result.subList((int) first, (int) first + (int) count).iterator();
         }
 
         @Override
         public long size() {
-            return SyncopeConsoleSession.get().getPlatformInfo().getConnIdLocations().size();
+            return SyncopeConsoleSession.get().getPlatformInfo().connIdLocations().size();
         }
 
         @Override

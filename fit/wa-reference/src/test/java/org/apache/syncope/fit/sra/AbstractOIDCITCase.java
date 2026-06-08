@@ -28,8 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import jakarta.ws.rs.core.Form;
@@ -41,6 +39,7 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.http.Consts;
@@ -56,10 +55,11 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
-import org.apache.syncope.common.lib.OIDCScopeConstants;
+import org.apache.syncope.common.lib.OIDCStandardScope;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.policy.AttrReleasePolicyTO;
 import org.apache.syncope.common.lib.policy.DefaultAttrReleasePolicyConf;
+import org.apache.syncope.common.lib.to.OIDCOpEntityTO;
 import org.apache.syncope.common.lib.to.OIDCRPClientAppTO;
 import org.apache.syncope.common.lib.types.ClientAppType;
 import org.apache.syncope.common.lib.types.OIDCGrantType;
@@ -67,19 +67,29 @@ import org.apache.syncope.common.lib.types.OIDCSubjectType;
 import org.apache.syncope.common.lib.types.PolicyType;
 import org.apache.syncope.common.rest.api.RESTHeaders;
 import org.apache.syncope.common.rest.api.service.wa.WAConfigService;
-import org.apereo.cas.oidc.OidcConstants;
+import org.apereo.cas.support.oauth.OAuth20Constants;
 import org.jsoup.Jsoup;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 abstract class AbstractOIDCITCase extends AbstractSRAITCase {
+
+    protected static final String GROUPS_SCOPE = "groups";
+
+    protected static final String CUSTOM_SCOPE1 = "customScope1";
+
+    protected static final String CUSTOM_CLAIM1 = "customClaim1";
+
+    protected static final String CUSTOM_CLAIM2 = "customClaim2";
 
     protected static String SRA_REGISTRATION_ID;
 
     protected static Long CLIENT_APP_ID;
 
-    protected static String CLIENT_ID;
+    protected static String SRA_CLIENT_ID;
 
-    protected static String CLIENT_SECRET;
+    protected static String SRA_CLIENT_SECRET;
 
     protected static String TOKEN_URI;
 
@@ -114,12 +124,31 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
                 });
     }
 
+    protected static void oidcOpEntitySetup() {
+        OIDCOpEntityTO oidcOpEntity;
+        try {
+            oidcOpEntity = OIDC_OP_ENTITY_SERVICE.get();
+        } catch (Exception e) {
+            Response response = OIDC_OP_ENTITY_SERVICE.generate("syncope", "RSA", 2048);
+            assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+
+            oidcOpEntity = OIDC_OP_ENTITY_SERVICE.get();
+        }
+
+        if (!oidcOpEntity.getCustomScopes().containsKey(GROUPS_SCOPE)) {
+            oidcOpEntity.getCustomScopes().put(GROUPS_SCOPE, Set.of("groups"));
+            OIDC_OP_ENTITY_SERVICE.set(oidcOpEntity);
+        }
+    }
+
     protected static void oidcClientAppSetup(
             final String appName,
             final String sraRegistrationId,
             final Long clientAppId,
             final String clientId,
             final String clientSecret) {
+
+        oidcOpEntitySetup();
 
         OIDCRPClientAppTO clientApp = CLIENT_APP_SERVICE.list(ClientAppType.OIDCRP).stream().
                 filter(app -> appName.equals(app.getName())).
@@ -153,9 +182,10 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
         clientApp.setLogoutUri(SRA_ADDRESS + "/logout");
         clientApp.setAuthPolicy(getAuthPolicy().getKey());
         clientApp.setAttrReleasePolicy(getAttrReleasePolicy().getKey());
-        clientApp.getScopes().add(OIDCScopeConstants.OPEN_ID);
-        clientApp.getScopes().add(OIDCScopeConstants.PROFILE);
-        clientApp.getScopes().add(OIDCScopeConstants.EMAIL);
+        clientApp.getScopes().add(OIDCStandardScope.openid.name());
+        clientApp.getScopes().add(OIDCStandardScope.profile.name());
+        clientApp.getScopes().add(OIDCStandardScope.email.name());
+        clientApp.getScopes().add(GROUPS_SCOPE);
         clientApp.getSupportedGrantTypes().add(OIDCGrantType.password);
         clientApp.getSupportedGrantTypes().add(OIDCGrantType.authorization_code);
 
@@ -164,16 +194,9 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
         await().atMost(120, TimeUnit.SECONDS).pollInterval(20, TimeUnit.SECONDS).until(() -> {
             try {
                 String metadata = WebClient.create(
-                        WA_ADDRESS + "/oidc/" + OidcConstants.WELL_KNOWN_OPENID_CONFIGURATION_URL).
-                        get().readEntity(String.class);
-                if (!metadata.contains("groups")) {
-                    WA_CONFIG_SERVICE.pushToWA(WAConfigService.PushSubject.conf, List.of());
-                    throw new IllegalStateException();
-                }
-                metadata = WebClient.create(
                         WA_ADDRESS + "/actuator/env", ANONYMOUS_USER, ANONYMOUS_KEY, null).
                         get().readEntity(String.class);
-                if (!metadata.contains("cas.authn.oidc.core.user-defined-scopes.syncope")) {
+                if (!metadata.contains("cas.authn.oidc.core.user-defined-scopes." + GROUPS_SCOPE)) {
                     WA_CONFIG_SERVICE.pushToWA(WAConfigService.PushSubject.conf, List.of());
                     throw new IllegalStateException();
                 }
@@ -255,7 +278,7 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
         response = httpclient.execute(get, context);
 
         headers = checkGetResponse(response, originalRequestURI.replace("/protected", ""));
-        assertTrue(headers.get(HttpHeaders.COOKIE).asText().contains("SESSION"));
+        assertTrue(headers.get(HttpHeaders.COOKIE).asString().contains("SESSION"));
 
         // 3. logout
         get = new HttpGet(SRA_ADDRESS + "/protected/logout");
@@ -297,12 +320,12 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
 
         // 1. obtain id and access tokens
         Form form = new Form().
-                param("grant_type", "password").
-                param("client_id", CLIENT_ID).
-                param("client_secret", CLIENT_SECRET).
+                param(OAuth20Constants.GRANT_TYPE, OIDCGrantType.password.getExternalForm()).
+                param(OAuth20Constants.CLIENT_ID, SRA_CLIENT_ID).
+                param(OAuth20Constants.CLIENT_SECRET, SRA_CLIENT_SECRET).
                 param("username", "verdi").
                 param("password", "password").
-                param("scope", "openid profile email syncope");
+                param(OAuth20Constants.SCOPE, "openid profile email " + GROUPS_SCOPE);
         response = WebClient.create(TOKEN_URI).post(form);
         assertEquals(HttpStatus.SC_OK, response.getStatus());
         assertTrue(response.getHeaderString(HttpHeaders.CONTENT_TYPE).startsWith(MediaType.APPLICATION_JSON));
@@ -311,13 +334,13 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
 
         if (checkIdToken()) {
             // 1a. take and verify id_token
-            String idToken = json.get("id_token").asText();
+            String idToken = json.get("id_token").asString();
             assertNotNull(idToken);
             checkJWT(idToken, true);
         }
 
         // 1b. take and verify access_token
-        String accessToken = json.get("access_token").asText();
+        String accessToken = json.get("access_token").asString();
         checkJWT(accessToken, false);
 
         // 2. access protected route
@@ -331,12 +354,12 @@ abstract class AbstractOIDCITCase extends AbstractSRAITCase {
         json = MAPPER.readTree(response.readEntity(String.class));
 
         ObjectNode headers = (ObjectNode) json.get("headers");
-        assertEquals(MediaType.APPLICATION_JSON, headers.get(HttpHeaders.ACCEPT).asText());
-        assertEquals(MediaType.APPLICATION_JSON, headers.get(HttpHeaders.CONTENT_TYPE).asText());
-        assertThat(headers.get("X-Forwarded-Host").asText(), is(oneOf("localhost:8080", "127.0.0.1:8080")));
+        assertEquals(MediaType.APPLICATION_JSON, headers.get(HttpHeaders.ACCEPT).asString());
+        assertEquals(MediaType.APPLICATION_JSON, headers.get(HttpHeaders.CONTENT_TYPE).asString());
+        assertThat(headers.get("X-Forwarded-Host").asString(), is(oneOf("localhost:8080", "127.0.0.1:8080")));
 
         String withHost = client.getBaseURI().toASCIIString().replace("/protected", "");
         String withIP = withHost.replace("localhost", "127.0.0.1");
-        assertThat(json.get("url").asText(), is(oneOf(withHost, withIP)));
+        assertThat(json.get("url").asString(), is(oneOf(withHost, withIP)));
     }
 }

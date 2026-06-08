@@ -26,11 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,11 +39,11 @@ import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationMana
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnySearchDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
+import org.apache.syncope.core.persistence.api.dao.DerSchemaDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.PlainSchemaDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmDAO;
 import org.apache.syncope.core.persistence.api.dao.RealmSearchDAO;
-import org.apache.syncope.core.persistence.api.dao.RoleDAO;
 import org.apache.syncope.core.persistence.api.dao.UserDAO;
 import org.apache.syncope.core.persistence.api.dao.search.AnyCond;
 import org.apache.syncope.core.persistence.api.dao.search.AnyTypeCond;
@@ -108,10 +106,10 @@ public class AnySearchTest extends AbstractTest {
     private RealmSearchDAO realmSearchDAO;
 
     @Autowired
-    private RoleDAO roleDAO;
+    private PlainSchemaDAO plainSchemaDAO;
 
     @Autowired
-    private PlainSchemaDAO plainSchemaDAO;
+    private DerSchemaDAO derSchemaDAO;
 
     @Autowired
     private PlainAttrValidationManager validator;
@@ -319,6 +317,24 @@ public class AnySearchTest extends AbstractTest {
         assertNotNull(users);
         assertEquals(1, users.size());
         assertEquals("rossini", users.getFirst().getUsername());
+    }
+
+    @Test
+    public void searchByUManager() {
+        AnyCond anyCond = new AnyCond(AttrCond.Type.EQ);
+        anyCond.setSchema("uManager");
+        anyCond.setExpression("823074dc-d280-436d-a7dd-07399fae48ec");
+
+        List<Group> groups = searchDAO.search(SearchCond.of(anyCond), AnyTypeKind.GROUP);
+        assertNotNull(groups);
+        assertEquals(1, groups.size());
+        assertEquals("director", groups.getFirst().getName());
+
+        anyCond.setExpression("puccini");
+        groups = searchDAO.search(SearchCond.of(anyCond), AnyTypeKind.GROUP);
+        assertNotNull(groups);
+        assertEquals(1, groups.size());
+        assertEquals("director", groups.getFirst().getName());
     }
 
     @Test
@@ -687,19 +703,14 @@ public class AnySearchTest extends AbstractTest {
     }
 
     @Test
-    public void asGroupOwner() {
+    public void asGroupManager() {
         // prepare authentication
-        Map<String, Set<String>> entForRealms = new HashMap<>();
-        roleDAO.findById(RoleDAO.GROUP_OWNER_ROLE).orElseThrow().getEntitlements().forEach(entitlement -> {
-            Set<String> realms = Optional.ofNullable(entForRealms.get(entitlement)).orElseGet(() -> {
-                Set<String> r = new HashSet<>();
-                entForRealms.put(entitlement, r);
-                return r;
-            });
-
-            realms.add(new RealmUtils.GroupOwnerRealm(
-                    SyncopeConstants.ROOT_REALM, "37d15e4c-cdc1-460b-a591-8505c8133806").output());
-        });
+        Map<String, Set<String>> entForRealms = Map.of(
+                IdRepoEntitlement.GROUP_SEARCH,
+                Set.of(new RealmUtils.ManagerRealm(
+                        SyncopeConstants.ROOT_REALM,
+                        AnyTypeKind.GROUP,
+                        "37d15e4c-cdc1-460b-a591-8505c8133806").output()));
 
         Set<SyncopeGrantedAuthority> authorities = new HashSet<>();
         entForRealms.forEach((key, value) -> {
@@ -723,13 +734,13 @@ public class AnySearchTest extends AbstractTest {
             assertEquals(
                     1,
                     searchDAO.count(
-                            realmDAO.getRoot(), true, authRealms, groupDAO.getAllMatchingCond(), AnyTypeKind.GROUP));
+                            realmDAO.getRoot(), true, authRealms, searchDAO.getAllMatchingCond(), AnyTypeKind.GROUP));
 
             List<Group> groups = searchDAO.search(
                     realmDAO.getRoot(),
                     true,
                     authRealms,
-                    groupDAO.getAllMatchingCond(),
+                    searchDAO.getAllMatchingCond(),
                     PageRequest.of(0, 10),
                     AnyTypeKind.GROUP);
             assertEquals(1, groups.size());
@@ -754,6 +765,35 @@ public class AnySearchTest extends AbstractTest {
         List<User> users = searchDAO.search(cond, AnyTypeKind.USER);
         assertNotNull(users);
         assertEquals(5, users.size());
+    }
+
+    @Test
+    public void findByDerAttrValue() {
+        List<User> list = searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("cn").orElseThrow().getExpression(), "Vivaldi, Antonio", false, AnyTypeKind.USER);
+        assertEquals(1, list.size());
+
+        list = searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("cn").orElseThrow().getExpression(), "VIVALDI, ANTONIO", false, AnyTypeKind.USER);
+        assertEquals(0, list.size());
+
+        list = searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("cn").orElseThrow().getExpression(), "VIVALDI, ANTONIO", true, AnyTypeKind.USER);
+        assertEquals(1, list.size());
+    }
+
+    @Test
+    public void findByInvalidDerAttrValue() {
+        assertTrue(searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("cn").orElseThrow().getExpression(),
+                "Antonio, Maria, Rossi", false, AnyTypeKind.USER).isEmpty());
+    }
+
+    @Test
+    public void findByInvalidDerAttrExpression() {
+        assertThrows(IllegalArgumentException.class, () -> searchDAO.findByDerAttrValue(
+                derSchemaDAO.findById("noschema").orElseThrow().getExpression(),
+                "Antonio, Maria", false, AnyTypeKind.USER).isEmpty());
     }
 
     @Test

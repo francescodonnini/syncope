@@ -23,7 +23,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.syncope.client.console.SyncopeConsoleSession;
 import org.apache.syncope.client.console.SyncopeWebApplication;
@@ -31,6 +30,7 @@ import org.apache.syncope.client.console.audit.AuditHistoryModal;
 import org.apache.syncope.client.console.commons.IdRepoConstants;
 import org.apache.syncope.client.console.notifications.NotificationTasks;
 import org.apache.syncope.client.console.pages.BasePage;
+import org.apache.syncope.client.console.rest.MfaRestClient;
 import org.apache.syncope.client.console.rest.UserRestClient;
 import org.apache.syncope.client.console.status.ChangePasswordModal;
 import org.apache.syncope.client.console.tasks.AnyPropagationTasks;
@@ -42,9 +42,10 @@ import org.apache.syncope.client.ui.commons.Constants;
 import org.apache.syncope.client.ui.commons.wizards.AjaxWizard;
 import org.apache.syncope.client.ui.commons.wizards.any.AnyWrapper;
 import org.apache.syncope.client.ui.commons.wizards.any.UserWrapper;
+import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.AnyOperations;
 import org.apache.syncope.common.lib.SyncopeConstants;
-import org.apache.syncope.common.lib.info.PlatformInfo;
 import org.apache.syncope.common.lib.request.UserUR;
 import org.apache.syncope.common.lib.to.AnyTypeClassTO;
 import org.apache.syncope.common.lib.to.DerSchemaTO;
@@ -62,10 +63,17 @@ import org.apache.wicket.model.IModel;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.model.ResourceModel;
 import org.apache.wicket.model.StringResourceModel;
+import org.apache.wicket.spring.injection.annot.SpringBean;
 
 public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient> {
 
     private static final long serialVersionUID = -1100228004207271270L;
+
+    @SpringBean
+    protected ConfParamOps confParamOps;
+
+    @SpringBean
+    protected MfaRestClient mfaRestClient;
 
     protected UserDirectoryPanel(final String id, final Builder builder) {
         this(id, builder, true);
@@ -110,8 +118,8 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                 target.add(displayAttributeModal.setContent(new UserDisplayAttributesModalPanel<>(
                         displayAttributeModal,
                         page.getPageReference(),
-                        plainSchemas.stream().map(PlainSchemaTO::getKey).collect(Collectors.toList()),
-                        derSchemas.stream().map(DerSchemaTO::getKey).collect(Collectors.toList()))));
+                        plainSchemas.stream().map(PlainSchemaTO::getKey).sorted().toList(),
+                        derSchemas.stream().map(DerSchemaTO::getKey).sorted().toList())));
 
                 displayAttributeModal.header(new ResourceModel("any.attr.display"));
                 displayAttributeModal.addSubmitButton();
@@ -141,8 +149,8 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                                 new UserWrapper(restClient.read(model.getObject().getKey())), target));
             }
         }, ActionType.EDIT,
-                String.format("%s,%s", IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE)).
-                setRealms(realm, model.getObject().getDynRealms());
+                "%s,%s".formatted(IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE)).
+                setRealm(realm);
 
         panel.add(new ActionLink<>() {
 
@@ -166,7 +174,7 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                 ((BasePage) pageRef.getPage()).getNotificationPanel().refresh(target);
             }
         }, ActionType.MUSTCHANGEPASSWORD, IdRepoEntitlement.USER_UPDATE).
-                setRealms(realm, model.getObject().getDynRealms());
+                setRealm(realm);
 
         if (wizardInModal) {
             panel.add(new ActionLink<>() {
@@ -192,10 +200,13 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                     displayAttributeModal.show(true);
                 }
             }, ActionType.PASSWORD_MANAGEMENT, IdRepoEntitlement.USER_UPDATE).
-                    setRealms(realm, model.getObject().getDynRealms());
+                    setRealm(realm);
 
-            PlatformInfo platformInfo = SyncopeConsoleSession.get().getAnonymousClient().platform();
-            if (platformInfo.isPwdResetAllowed() && !platformInfo.isPwdResetRequiringSecurityQuestions()) {
+            if (confParamOps.get(SyncopeConsoleSession.get().getDomain(),
+                    StandardConfParams.PASSWORD_RESET_ALLOWED, false, boolean.class)
+                    && !confParamOps.get(SyncopeConsoleSession.get().getDomain(),
+                            StandardConfParams.PASSWORD_RESET_SECURITY_QUESTION, false, boolean.class)) {
+
                 panel.add(new ActionLink<>() {
 
                     private static final long serialVersionUID = -7978723352517770644L;
@@ -209,14 +220,34 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                             SyncopeConsoleSession.get().success(getString(Constants.OPERATION_SUCCEEDED));
                             target.add(container);
                         } catch (Exception e) {
-                            LOG.error("While actioning object {}", model.getObject().getKey(), e);
+                            LOG.error("While requesting password reject for {}", model.getObject().getUManager(), e);
                             SyncopeConsoleSession.get().onException(e);
                         }
                         ((BasePage) pageRef.getPage()).getNotificationPanel().refresh(target);
                     }
                 }, ActionType.REQUEST_PASSWORD_RESET, IdRepoEntitlement.USER_UPDATE).
-                        setRealms(realm, model.getObject().getDynRealms());
+                        setRealm(realm);
             }
+
+            panel.add(new ActionLink<>() {
+
+                private static final long serialVersionUID = -7978723352517770644L;
+
+                @Override
+                public void onClick(final AjaxRequestTarget target, final UserTO ignore) {
+                    try {
+                        mfaRestClient.dismiss(model.getObject().getUsername());
+
+                        SyncopeConsoleSession.get().success(getString(Constants.OPERATION_SUCCEEDED));
+                        target.add(container);
+                    } catch (Exception e) {
+                        LOG.error("While dismissing MFA for {}", model.getObject().getUManager(), e);
+                        SyncopeConsoleSession.get().onException(e);
+                    }
+                    ((BasePage) pageRef.getPage()).getNotificationPanel().refresh(target);
+                }
+            }, ActionType.DISMISS_MFA, IdRepoEntitlement.USER_UPDATE, true).
+                    setRealm(realm);
 
             SyncopeWebApplication.get().getAnyDirectoryPanelAdditionalActionLinksProvider().get(
                     model,
@@ -308,8 +339,8 @@ public class UserDirectoryPanel extends AnyDirectoryPanel<UserTO, UserRestClient
                     altDefaultModal.show(true);
                 }
             }, ActionType.VIEW_AUDIT_HISTORY,
-                    String.format("%s,%s", IdRepoEntitlement.USER_READ, IdRepoEntitlement.AUDIT_LIST)).
-                    setRealms(realm, model.getObject().getDynRealms());
+                    "%s,%s".formatted(IdRepoEntitlement.USER_READ, IdRepoEntitlement.AUDIT_LIST)).
+                    setRealm(realm);
         }
 
         panel.add(new ActionLink<>() {

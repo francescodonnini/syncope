@@ -20,6 +20,7 @@ package org.apache.syncope.core.logic;
 
 import org.apache.syncope.common.keymaster.client.api.ServiceOps;
 import org.apache.syncope.core.logic.init.AMEntitlementLoader;
+import org.apache.syncope.core.logic.wa.ConsentDecisionLogic;
 import org.apache.syncope.core.logic.wa.GoogleMfaAuthAccountLogic;
 import org.apache.syncope.core.logic.wa.GoogleMfaAuthTokenLogic;
 import org.apache.syncope.core.logic.wa.ImpersonationLogic;
@@ -31,7 +32,7 @@ import org.apache.syncope.core.persistence.api.dao.AttrRepoDAO;
 import org.apache.syncope.core.persistence.api.dao.AuthModuleDAO;
 import org.apache.syncope.core.persistence.api.dao.AuthProfileDAO;
 import org.apache.syncope.core.persistence.api.dao.CASSPClientAppDAO;
-import org.apache.syncope.core.persistence.api.dao.OIDCJWKSDAO;
+import org.apache.syncope.core.persistence.api.dao.OIDCOpEntityDAO;
 import org.apache.syncope.core.persistence.api.dao.OIDCRPClientAppDAO;
 import org.apache.syncope.core.persistence.api.dao.PasswordManagementDAO;
 import org.apache.syncope.core.persistence.api.dao.SAML2IdPEntityDAO;
@@ -44,7 +45,7 @@ import org.apache.syncope.core.provisioning.api.data.AttrRepoDataBinder;
 import org.apache.syncope.core.provisioning.api.data.AuthModuleDataBinder;
 import org.apache.syncope.core.provisioning.api.data.AuthProfileDataBinder;
 import org.apache.syncope.core.provisioning.api.data.ClientAppDataBinder;
-import org.apache.syncope.core.provisioning.api.data.OIDCJWKSDataBinder;
+import org.apache.syncope.core.provisioning.api.data.OIDCOpEntityDataBinder;
 import org.apache.syncope.core.provisioning.api.data.PasswordManagementDataBinder;
 import org.apache.syncope.core.provisioning.api.data.SAML2IdPEntityDataBinder;
 import org.apache.syncope.core.provisioning.api.data.SRARouteDataBinder;
@@ -122,13 +123,12 @@ public class AMLogicContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public OIDCJWKSLogic oidcJWKSLogic(
-            final OIDCJWKSDataBinder oidcJWKSDataBinder,
-            final OIDCJWKSDAO oidcJWKSDAO,
-            final WAConfigDAO waConfigDAO,
+    public OIDCOpEntityLogic oidcOpEntityLogic(
+            final OIDCOpEntityDataBinder oidcOpEntityDataBinder,
+            final OIDCOpEntityDAO oidcOpEntityDAO,
             final EntityFactory entityFactory) {
 
-        return new OIDCJWKSLogic(oidcJWKSDataBinder, oidcJWKSDAO, waConfigDAO, entityFactory);
+        return new OIDCOpEntityLogic(oidcOpEntityDataBinder, oidcOpEntityDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean
@@ -180,6 +180,16 @@ public class AMLogicContext {
             final EntityFactory entityFactory) {
 
         return new ImpersonationLogic(authProfileDataBinder, authProfileDAO, entityFactory);
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public ConsentDecisionLogic consentDecisionLogic(
+            final AuthProfileDataBinder authProfileDataBinder,
+            final AuthProfileDAO authProfileDAO,
+            final EntityFactory entityFactory) {
+
+        return new ConsentDecisionLogic(authProfileDataBinder, authProfileDAO, entityFactory);
     }
 
     @ConditionalOnMissingBean

@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.policy.AccessPolicyTO;
@@ -75,8 +74,8 @@ public class PolicyITCase extends AbstractITCase {
                 corrRule.setKey("TestPullRule");
                 corrRule.setEngine(ImplementationEngine.GROOVY);
                 corrRule.setType(IdMImplementationType.INBOUND_CORRELATION_RULE);
-                corrRule.setBody(IOUtils.toString(
-                        getClass().getResourceAsStream("/TestPullRule.groovy"), StandardCharsets.UTF_8));
+                corrRule.setBody(new String(
+                        getClass().getResourceAsStream("/TestPullRule.groovy").readAllBytes(), StandardCharsets.UTF_8));
                 Response response = IMPLEMENTATION_SERVICE.create(corrRule);
                 corrRule = IMPLEMENTATION_SERVICE.read(
                         corrRule.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -102,8 +101,8 @@ public class PolicyITCase extends AbstractITCase {
                 corrRule.setKey("TestPushRule");
                 corrRule.setEngine(ImplementationEngine.GROOVY);
                 corrRule.setType(IdMImplementationType.PUSH_CORRELATION_RULE);
-                corrRule.setBody(IOUtils.toString(
-                        getClass().getResourceAsStream("/TestPushRule.groovy"), StandardCharsets.UTF_8));
+                corrRule.setBody(new String(
+                        getClass().getResourceAsStream("/TestPushRule.groovy").readAllBytes(), StandardCharsets.UTF_8));
                 Response response = IMPLEMENTATION_SERVICE.create(corrRule);
                 corrRule = IMPLEMENTATION_SERVICE.read(
                         corrRule.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
@@ -305,6 +304,7 @@ public class PolicyITCase extends AbstractITCase {
         assertNotNull(newPolicyTO);
 
         DefaultAttrReleasePolicyConf policyConf = (DefaultAttrReleasePolicyConf) newPolicyTO.getConf();
+        assertTrue(policyConf.getPrincipalAttrRepoConf().getAttrRepos().contains("DefaultStubAttrRepo"));
         policyConf.getAllowedAttrs().add("postalCode");
 
         // update new policy
@@ -318,6 +318,7 @@ public class PolicyITCase extends AbstractITCase {
         assertTrue(policyConf.getAllowedAttrs().contains("postalCode"));
         assertTrue(policyConf.getAllowedAttrs().contains("givenName"));
         assertTrue(policyConf.getIncludeOnlyAttrs().contains("cn"));
+        assertTrue(policyConf.getPrincipalAttrRepoConf().getAttrRepos().contains("DefaultStubAttrRepo"));
     }
 
     @Test
@@ -409,7 +410,7 @@ public class PolicyITCase extends AbstractITCase {
     @Test
     public void getInboundCorrelationRuleJavaClasses() {
         Set<String> classes = ANONYMOUS_CLIENT.platform().
-                getJavaImplInfo(IdMImplementationType.INBOUND_CORRELATION_RULE).get().getClasses();
+                getJavaImplInfo(IdMImplementationType.INBOUND_CORRELATION_RULE).get().classes();
         assertEquals(1, classes.size());
         assertEquals(DummyInboundCorrelationRule.class.getName(), classes.iterator().next());
     }
@@ -417,7 +418,7 @@ public class PolicyITCase extends AbstractITCase {
     @Test
     public void getPushCorrelationRuleJavaClasses() {
         Set<String> classes = ANONYMOUS_CLIENT.platform().
-                getJavaImplInfo(IdMImplementationType.PUSH_CORRELATION_RULE).get().getClasses();
+                getJavaImplInfo(IdMImplementationType.PUSH_CORRELATION_RULE).get().classes();
         assertEquals(1, classes.size());
         assertEquals(DummyPushCorrelationRule.class.getName(), classes.iterator().next());
     }

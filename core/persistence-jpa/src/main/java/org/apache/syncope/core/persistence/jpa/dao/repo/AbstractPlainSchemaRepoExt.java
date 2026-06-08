@@ -19,14 +19,15 @@
 package org.apache.syncope.core.persistence.jpa.dao.repo;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.apache.syncope.core.persistence.api.dao.ExternalResourceDAO;
 import org.apache.syncope.core.persistence.api.entity.AnyTypeClass;
 import org.apache.syncope.core.persistence.api.entity.AnyUtilsFactory;
 import org.apache.syncope.core.persistence.api.entity.PlainSchema;
-import org.apache.syncope.core.persistence.jpa.entity.AbstractSchema;
 import org.apache.syncope.core.persistence.jpa.entity.JPAPlainSchema;
 import org.apache.syncope.core.persistence.jpa.entity.JPARealm;
 import org.apache.syncope.core.persistence.jpa.entity.anyobject.JPAAnyObject;
@@ -58,12 +59,14 @@ abstract class AbstractPlainSchemaRepoExt extends AbstractSchemaRepoExt implemen
         return findByAnyTypeClasses(anyTypeClasses, JPAPlainSchema.class.getSimpleName(), PlainSchema.class);
     }
 
-    @Override
-    public PlainSchema save(final PlainSchema schema) {
-        ((AbstractSchema) schema).map2json();
-        PlainSchema merged = entityManager.merge(schema);
-        ((AbstractSchema) merged).postSave();
-        return merged;
+    protected boolean hasAttrs(final PlainSchema schema, final String hasAttrsQuery, final String hasAttrsAlias) {
+        Query query = entityManager.createNativeQuery("SELECT SUM(counts) FROM ("
+                + TABLES.stream().
+                        map(t -> hasAttrsQuery.replace("%TABLE%", t).replace("%SCHEMA%", schema.getKey())).
+                        collect(Collectors.joining(" UNION ALL "))
+                + ")" + hasAttrsAlias);
+
+        return ((Number) query.getSingleResult()).longValue() > 0;
     }
 
     @Override

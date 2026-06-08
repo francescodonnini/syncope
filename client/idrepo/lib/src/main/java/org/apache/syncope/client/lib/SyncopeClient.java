@@ -18,13 +18,10 @@
  */
 package org.apache.syncope.client.lib;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.ws.rs.core.EntityTag;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.io.IOException;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +46,7 @@ import org.apache.syncope.common.lib.search.AnyObjectFiqlSearchConditionBuilder;
 import org.apache.syncope.common.lib.search.ConnObjectTOFiqlSearchConditionBuilder;
 import org.apache.syncope.common.lib.search.GroupFiqlSearchConditionBuilder;
 import org.apache.syncope.common.lib.search.OrderByClauseBuilder;
+import org.apache.syncope.common.lib.search.RealmFiqlSearchConditionBuilder;
 import org.apache.syncope.common.lib.search.UserFiqlSearchConditionBuilder;
 import org.apache.syncope.common.lib.to.UserTO;
 import org.apache.syncope.common.rest.api.Preference;
@@ -59,6 +57,9 @@ import org.apache.syncope.common.rest.api.service.ExecutableService;
 import org.apache.syncope.common.rest.api.service.UserSelfService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Entry point for client access to all REST services exposed by Syncope core; obtain instances via
@@ -74,6 +75,15 @@ public class SyncopeClient {
     public record JwtInfo(String value, OffsetDateTime expiration)
             implements Serializable {
 
+    }
+
+    /**
+     * Returns a new instance of {@link RealmFiqlSearchConditionBuilder}, for assisted building of FIQL queries.
+     *
+     * @return default instance of {@link RealmFiqlSearchConditionBuilder}
+     */
+    public static RealmFiqlSearchConditionBuilder getRealmFiqlSearchConditionBuilder() {
+        return new RealmFiqlSearchConditionBuilder();
     }
 
     /**
@@ -181,6 +191,7 @@ public class SyncopeClient {
      * @param <T> any service class
      * @param service service class instance
      * @param etag ETag value
+     *
      * @return given service instance, with {@code If-Match} set
      */
     public static <T> T ifMatch(final T service, final EntityTag etag) {
@@ -214,7 +225,8 @@ public class SyncopeClient {
 
     protected static final String HEADER_SPLIT_PROPERTY = "org.apache.cxf.http.header.split";
 
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
+    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().
+            enable(MapperFeature.USE_GETTERS_AS_SETTERS).build();
 
     protected final JAXRSClientFactoryBean restClientFactory;
 
@@ -263,23 +275,32 @@ public class SyncopeClient {
     protected void init(final AuthenticationHandler authHandler) {
         cleanup();
 
-        if (authHandler instanceof final AnonymousAuthenticationHandler anonymous) {
-            restClientFactory.setUsername(anonymous.getUsername());
-            restClientFactory.setPassword(anonymous.getPassword());
-        } else if (authHandler instanceof final BasicAuthenticationHandler basic) {
-            restClientFactory.setUsername(basic.getUsername());
-            restClientFactory.setPassword(basic.getPassword());
+        switch (authHandler) {
+            case ObtainingJWTAuthenticationHandler obtaining -> {
+                restClientFactory.setUsername(obtaining.getUsername());
+                restClientFactory.setPassword(obtaining.getPassword());
 
-            Response response = getService(AccessTokenService.class).login();
-            String jwt = response.getHeaderString(RESTHeaders.TOKEN);
-            String jwtExpiration = response.getHeaderString(RESTHeaders.TOKEN_EXPIRE);
-            restClientFactory.getHeaders().put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + jwt));
-            restClientFactory.getHeaders().put(HttpHeaders.EXPIRES, List.of(jwtExpiration));
+                Response response = getService(AccessTokenService.class).login();
+                String jwt = response.getHeaderString(RESTHeaders.TOKEN);
+                restClientFactory.getHeaders().put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + jwt));
+                String jwtExpiration = response.getHeaderString(RESTHeaders.TOKEN_EXPIRE);
+                restClientFactory.getHeaders().put(HttpHeaders.EXPIRES, List.of(jwtExpiration));
 
-            restClientFactory.setUsername(null);
-            restClientFactory.setPassword(null);
-        } else if (authHandler instanceof final JWTAuthenticationHandler jwt) {
-            restClientFactory.getHeaders().put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + jwt.getJwt()));
+                restClientFactory.setUsername(null);
+                restClientFactory.setPassword(null);
+            }
+
+            case BasicAuthenticationHandler basic -> {
+                restClientFactory.setUsername(basic.getUsername());
+                restClientFactory.setPassword(basic.getPassword());
+            }
+
+            case JWTAuthenticationHandler jwt -> {
+                restClientFactory.getHeaders().put(HttpHeaders.AUTHORIZATION, List.of("Bearer " + jwt.getJwt()));
+            }
+
+            default -> {
+            }
         }
     }
 
@@ -436,13 +457,11 @@ public class SyncopeClient {
         try {
             return new Self(
                     response.readEntity(UserTO.class),
-                    MAPPER.readValue(
-                            response.getHeaderString(RESTHeaders.OWNED_ENTITLEMENTS), new TypeReference<>() {
+                    MAPPER.readValue(response.getHeaderString(RESTHeaders.OWNED_ENTITLEMENTS), new TypeReference<>() {
                     }),
-                    MAPPER.readValue(
-                            response.getHeaderString(RESTHeaders.DELEGATIONS), new TypeReference<>() {
+                    MAPPER.readValue(response.getHeaderString(RESTHeaders.DELEGATIONS), new TypeReference<>() {
                     }));
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }

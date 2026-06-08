@@ -19,6 +19,7 @@
 package org.apache.syncope.fit.core;
 
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -29,7 +30,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 import jakarta.ws.rs.HttpMethod;
-import jakarta.ws.rs.core.GenericType;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.io.IOException;
@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.cxf.helpers.IOUtils;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.syncope.client.lib.SyncopeClient;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.Attr;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
@@ -72,6 +73,7 @@ import org.apache.syncope.common.lib.to.PropagationStatus;
 import org.apache.syncope.common.lib.to.PropagationTaskTO;
 import org.apache.syncope.common.lib.to.Provision;
 import org.apache.syncope.common.lib.to.ProvisioningResult;
+import org.apache.syncope.common.lib.to.PullTaskTO;
 import org.apache.syncope.common.lib.to.PushTaskTO;
 import org.apache.syncope.common.lib.to.RealmTO;
 import org.apache.syncope.common.lib.to.ReconStatus;
@@ -154,7 +156,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getPlainAttrs().add(attr("surname", userId));
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
         assertTrue(userTO.getResources().isEmpty());
 
         // 2. update assigning a resource forcing mandatory constraints: must fail with RequiredValuesMissing
@@ -181,12 +182,11 @@ public class UserIssuesITCase extends AbstractITCase {
 
         ProvisioningResult<UserTO> result = updateUser(userUR);
         assertNotNull(result.getPropagationStatuses().getFirst().getFailureReason());
-        userTO = result.getEntity();
 
         // 4. update assigning a resource NOT forcing mandatory constraints
         // BUT not priority: must succeed
         userUR = new UserUR();
-        userUR.setKey(userTO.getKey());
+        userUR.setKey(result.getEntity().getKey());
         userUR.setPassword(new PasswordPatch.Builder().value("newPassword123456").build());
         userUR.getResources().add(new StringPatchItem.Builder().
                 operation(PatchOperation.ADD_REPLACE).value(RESOURCE_NAME_CSV).build());
@@ -200,7 +200,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().add(RESOURCE_NAME_TESTDB);
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
         assertEquals(1, userTO.getResources().size());
 
         JdbcTemplate jdbcTemplate = new JdbcTemplate(testDataSource);
@@ -231,15 +230,12 @@ public class UserIssuesITCase extends AbstractITCase {
         inUserTO.getResources().add(RESOURCE_NAME_LDAP);
 
         UserTO userTO = createUser(inUserTO).getEntity();
-        assertNotNull(userTO);
 
         UserUR userUR = new UserUR();
-
         userUR.setKey(userTO.getKey());
         userUR.setUsername(new StringReplacePatchItem.Builder().value('1' + userTO.getUsername()).build());
 
         userTO = updateUser(userUR).getEntity();
-        assertNotNull(userTO);
         assertEquals('1' + inUserTO.getUsername(), userTO.getUsername());
     }
 
@@ -250,7 +246,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getMemberships().clear();
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         UserUR userUR = new UserUR();
         userUR.setKey(userTO.getKey());
@@ -317,7 +312,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().add(RESOURCE_NAME_CSV);
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
         assertEquals(2, userTO.getMemberships().size());
         assertEquals(1, userTO.getResources().size());
 
@@ -334,7 +328,6 @@ public class UserIssuesITCase extends AbstractITCase {
                 build();
 
         userTO = updateUser(userUR).getEntity();
-        assertNotNull(userTO);
         assertEquals(1, userTO.getMemberships().size());
 
         connObjectTO = RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_CSV, AnyTypeKind.USER.name(), userTO.getKey());
@@ -351,7 +344,6 @@ public class UserIssuesITCase extends AbstractITCase {
                 value(userTO.getResources().iterator().next()).build());
 
         userTO = updateUser(userUR).getEntity();
-        assertNotNull(userTO);
         assertEquals(1, userTO.getMemberships().size());
         assertFalse(userTO.getResources().isEmpty());
 
@@ -368,7 +360,6 @@ public class UserIssuesITCase extends AbstractITCase {
                 build();
 
         userTO = updateUser(userUR).getEntity();
-        assertNotNull(userTO);
         assertTrue(userTO.getMemberships().isEmpty());
         assertTrue(userTO.getResources().isEmpty());
 
@@ -408,8 +399,8 @@ public class UserIssuesITCase extends AbstractITCase {
     @Test()
     public void issueSYNCOPE51() {
         String originalCA = confParamOps.get(SyncopeConstants.MASTER_DOMAIN,
-                "password.cipher.algorithm", null, String.class);
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", "MD5");
+                StandardConfParams.PASSWORD_CIPHER_ALGORITHM, null, String.class);
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, "MD5");
 
         UserCR userCR = UserITCase.getSample("syncope51@syncope.apache.org");
         userCR.setPassword("password");
@@ -421,7 +412,7 @@ public class UserIssuesITCase extends AbstractITCase {
             assertEquals(ClientExceptionType.NotFound, e.getType());
             assertTrue(e.getElements().iterator().next().contains("MD5"));
         } finally {
-            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", originalCA);
+            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, originalCA);
         }
     }
 
@@ -431,7 +422,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().clear();
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         UserUR userUR = new UserUR();
         userUR.setKey(userTO.getKey());
@@ -440,12 +430,14 @@ public class UserIssuesITCase extends AbstractITCase {
         userUR.getResources().add(new StringPatchItem.Builder().
                 operation(PatchOperation.ADD_REPLACE).value(RESOURCE_NAME_UPDATE).build());
 
-        userTO = updateUser(userUR).getEntity();
-        assertNotNull(userTO);
+        assertDoesNotThrow(() -> updateUser(userUR).getEntity());
     }
 
     @Test
     public void issueSYNCOPE279() {
+        // see https://github.com/payara/Payara/issues/7203
+        assumeFalse(IS_DEPLOYED_IN_PAYARA);
+
         UserCR userCR = UserITCase.getUniqueSample("syncope279@apache.org");
         userCR.getResources().clear();
         userCR.getResources().add(RESOURCE_NAME_TIMEOUT);
@@ -465,11 +457,10 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().add(RESOURCE_NAME_TESTDB2);
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
         assertTrue(userTO.getResources().contains(RESOURCE_NAME_TESTDB));
         assertTrue(userTO.getResources().contains(RESOURCE_NAME_TESTDB2));
 
-        String pwdOnSyncope = userTO.getPassword();
+        String pwdOnSyncope = getPassword(userTO.getKey());
 
         ConnObject userOnDb = RESOURCE_SERVICE.readConnObject(
                 RESOURCE_NAME_TESTDB, AnyTypeKind.USER.name(), userTO.getKey());
@@ -502,7 +493,7 @@ public class UserIssuesITCase extends AbstractITCase {
         assertEquals(RESOURCE_NAME_TESTDB, result.getPropagationStatuses().getFirst().getResource());
 
         // 3b. verify that password hasn't changed on Syncope
-        assertEquals(pwdOnSyncope, userTO.getPassword());
+        assertEquals(pwdOnSyncope, getPassword(userTO.getKey()));
 
         // 3c. verify that password *has* changed on testdb
         userOnDb = RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_TESTDB, AnyTypeKind.USER.name(), userTO.getKey());
@@ -525,10 +516,10 @@ public class UserIssuesITCase extends AbstractITCase {
     public void issueSYNCOPE136AES() {
         // 1. read configured cipher algorithm in order to be able to restore it at the end of test
         String origpwdCipherAlgo = confParamOps.get(SyncopeConstants.MASTER_DOMAIN,
-                "password.cipher.algorithm", null, String.class);
+                StandardConfParams.PASSWORD_CIPHER_ALGORITHM, null, String.class);
 
         // 2. set AES password cipher algorithm
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", "AES");
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, "AES");
 
         UserTO userTO = null;
         try {
@@ -537,7 +528,6 @@ public class UserIssuesITCase extends AbstractITCase {
             userCR.getResources().clear();
 
             userTO = createUser(userCR).getEntity();
-            assertNotNull(userTO);
 
             // 4. update user, assign a propagation priority resource but don't provide any password
             UserUR userUR = new UserUR();
@@ -547,9 +537,6 @@ public class UserIssuesITCase extends AbstractITCase {
             userUR.setPassword(new PasswordPatch.Builder().onSyncope(false).resource(RESOURCE_NAME_LDAP).build());
 
             ProvisioningResult<UserTO> result = updateUser(userUR);
-            assertNotNull(result);
-            userTO = result.getEntity();
-            assertNotNull(userTO);
 
             // 5. verify that propagation was successful
             List<PropagationStatus> props = result.getPropagationStatuses();
@@ -561,7 +548,8 @@ public class UserIssuesITCase extends AbstractITCase {
             assertEquals(ExecStatus.SUCCESS, prop.getStatus());
         } finally {
             // restore initial cipher algorithm
-            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", origpwdCipherAlgo);
+            confParamOps.set(
+                    SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, origpwdCipherAlgo);
 
             if (userTO != null) {
                 deleteUser(userTO.getKey());
@@ -575,7 +563,6 @@ public class UserIssuesITCase extends AbstractITCase {
         UserCR userCR = UserITCase.getUniqueSample("syncope136_Random@apache.org");
         userCR.getResources().clear();
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         // 2. update user, assign a propagation priority resource but don't provide any password
         UserUR userUR = new UserUR();
@@ -728,7 +715,6 @@ public class UserIssuesITCase extends AbstractITCase {
         UserCR userCR = UserITCase.getUniqueSample("syncope383@apache.org");
         userCR.getResources().clear();
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         // 2. assign resource without specifying a new pwd and check propagation failure
         UserUR userUR = new UserUR();
@@ -770,7 +756,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getPlainAttrs().add(attr("surname", userId));
 
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
         assertTrue(userTO.getResources().isEmpty());
 
         // 2. update assigning a resource NOT forcing mandatory constraints
@@ -804,15 +789,16 @@ public class UserIssuesITCase extends AbstractITCase {
             logicActions.setKey("DoubleValueLogicActions");
             logicActions.setEngine(ImplementationEngine.GROOVY);
             logicActions.setType(IdRepoImplementationType.LOGIC_ACTIONS);
-            logicActions.setBody(org.apache.commons.io.IOUtils.toString(
-                    getClass().getResourceAsStream("/DoubleValueLogicActions.groovy"), StandardCharsets.UTF_8));
+            logicActions.setBody(new String(
+                    getClass().getResourceAsStream("/DoubleValueLogicActions.groovy").readAllBytes(),
+                    StandardCharsets.UTF_8));
             Response response = IMPLEMENTATION_SERVICE.create(logicActions);
             logicActions = IMPLEMENTATION_SERVICE.read(
                     logicActions.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));
         }
         assertNotNull(logicActions);
 
-        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().keyword("two").build()).getResult().getFirst();
+        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().fiql("name==two").build()).getResult().getFirst();
         assertNotNull(realm);
         realm.getActions().add(logicActions.getKey());
         REALM_SERVICE.update(realm);
@@ -836,14 +822,11 @@ public class UserIssuesITCase extends AbstractITCase {
     public void issueSYNCOPE426() {
         UserCR userCR = UserITCase.getUniqueSample("syncope426@syncope.apache.org");
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         UserUR userUR = new UserUR();
         userUR.setKey(userTO.getKey());
         userUR.setPassword(new PasswordPatch.Builder().value("anotherPassword123").build());
-        userTO = USER_SERVICE.update(userUR).readEntity(new GenericType<ProvisioningResult<UserTO>>() {
-        }).getEntity();
-        assertNotNull(userTO);
+        assertDoesNotThrow(() -> updateUser(userUR));
     }
 
     @Test
@@ -853,7 +836,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.setPassword(null);
         userCR.setStorePassword(false);
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         // 2. try to update user by subscribing a resource - works but propagation is not even attempted
         UserUR userUR = new UserUR();
@@ -876,7 +858,6 @@ public class UserIssuesITCase extends AbstractITCase {
         UserCR userCR = UserITCase.getUniqueSample("syncope454@syncope.apache.org");
         userCR.getResources().add(RESOURCE_NAME_LDAP);
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         // 2. read resource configuration for LDAP binding
         ConnObject connObject =
@@ -948,7 +929,6 @@ public class UserIssuesITCase extends AbstractITCase {
         userUR.getPlainAttrs().add(attrAddReplacePatch("firstname", "firstnameNew"));
 
         result = updateUser(userUR);
-        assertNotNull(userTO);
         assertEquals(1, result.getPropagationStatuses().size());
         assertEquals(ExecStatus.SUCCESS, result.getPropagationStatuses().getFirst().getStatus());
         userTO = result.getEntity();
@@ -1079,7 +1059,7 @@ public class UserIssuesITCase extends AbstractITCase {
 
         UserTO userTO = createUser(userCR).getEntity();
         assertNotNull(userTO);
-        assertNull(userTO.getPassword());
+        assertNull(getPassword(userTO.getKey()));
 
         // 2. create existing user on csv and check that password on Syncope is null and that password on resource
         // doesn't change
@@ -1097,17 +1077,16 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().add(RESOURCE_NAME_CSV);
 
         userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
-        ConnObject connObjectTO =
+        ConnObject connObject =
                 RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_CSV, AnyTypeKind.USER.name(), userTO.getKey());
-        assertNotNull(connObjectTO);
+        assertNotNull(connObject);
 
         // check if password has not changed
         assertEquals(
                 "password0",
-                connObjectTO.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
-        assertNull(userTO.getPassword());
+                connObject.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
+        assertNull(getPassword(userTO.getKey()));
 
         // 3. create user with not null password and propagate onto resource-csv, specify not to save password on
         // Syncope local storage
@@ -1118,17 +1097,16 @@ public class UserIssuesITCase extends AbstractITCase {
         userCR.getResources().add(RESOURCE_NAME_CSV);
 
         userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
-        connObjectTO =
+        connObject =
                 RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_CSV, AnyTypeKind.USER.name(), userTO.getKey());
-        assertNotNull(connObjectTO);
+        assertNotNull(connObject);
 
-        // check if password has been propagated and that saved userTO's password is null
+        // check if password has been propagated and that saved user's password is null
         assertEquals(
                 "passwordTESTNULL1",
-                connObjectTO.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
-        assertNull(userTO.getPassword());
+                connObject.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
+        assertNull(getPassword(userTO.getKey()));
 
         // 4. create user and propagate password on resource-csv and on Syncope local storage
         userCR = UserITCase.getUniqueSample("syncope391@syncope.apache.org");
@@ -1138,15 +1116,14 @@ public class UserIssuesITCase extends AbstractITCase {
 
         // storePassword true by default
         userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
-        connObjectTO = RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_CSV, AnyTypeKind.USER.name(), userTO.getKey());
-        assertNotNull(connObjectTO);
+        connObject = RESOURCE_SERVICE.readConnObject(RESOURCE_NAME_CSV, AnyTypeKind.USER.name(), userTO.getKey());
+        assertNotNull(connObject);
 
         // check if password has been correctly propagated on Syncope and resource-csv as usual
         assertEquals(
                 "passwordTESTNULL1",
-                connObjectTO.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
+                connObject.getAttr(OperationalAttributes.PASSWORD_NAME).orElseThrow().getValues().getFirst());
         SyncopeClient.Self self = CLIENT_FACTORY.create(userTO.getUsername(), "passwordTESTNULL1").self();
         assertNotNull(self);
 
@@ -1229,7 +1206,7 @@ public class UserIssuesITCase extends AbstractITCase {
         passwordPolicy = createPolicy(PolicyType.PASSWORD, passwordPolicy);
         assertNotNull(passwordPolicy);
 
-        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().keyword("two").build()).getResult().getFirst();
+        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().fiql("name==two").build()).getResult().getFirst();
         String oldPasswordPolicy = realm.getPasswordPolicy();
         realm.setPasswordPolicy(passwordPolicy.getKey());
         REALM_SERVICE.update(realm);
@@ -1262,10 +1239,10 @@ public class UserIssuesITCase extends AbstractITCase {
     public void issueSYNCOPE686() {
         // 1. read configured cipher algorithm in order to be able to restore it at the end of test
         String origpwdCipherAlgo = confParamOps.get(SyncopeConstants.MASTER_DOMAIN,
-                "password.cipher.algorithm", null, String.class);
+                StandardConfParams.PASSWORD_CIPHER_ALGORITHM, null, String.class);
 
         // 2. set AES password cipher algorithm
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", "AES");
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, "AES");
 
         try {
             // 3. create group with LDAP resource assigned
@@ -1279,7 +1256,6 @@ public class UserIssuesITCase extends AbstractITCase {
             userCR.getResources().clear();
 
             UserTO userTO = createUser(userCR).getEntity();
-            assertNotNull(userTO);
 
             // 5. update user with the new group, and don't provide any password
             UserUR userUR = new UserUR();
@@ -1300,7 +1276,8 @@ public class UserIssuesITCase extends AbstractITCase {
             assertEquals(ExecStatus.SUCCESS, prop.getStatus());
         } finally {
             // restore initial cipher algorithm
-            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", origpwdCipherAlgo);
+            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM,
+                    origpwdCipherAlgo);
         }
     }
 
@@ -1371,41 +1348,11 @@ public class UserIssuesITCase extends AbstractITCase {
     }
 
     @Test
-    public void issueSYNCOPE1099() {
-        // 1. create group with dynamic condition and resource
-        GroupCR groupCR = GroupITCase.getSample("syncope1099G");
-        groupCR.getResources().clear();
-        groupCR.getResources().add(RESOURCE_NAME_TESTDB);
-        groupCR.setUDynMembershipCond("firstname==issueSYNCOPE1099");
-
-        GroupTO group = createGroup(groupCR).getEntity();
-        assertNotNull(group);
-
-        // 2. create user matching the condition above
-        UserCR userCR = UserITCase.getUniqueSample("syncope1099U@apache.org");
-        userCR.getPlainAttr("firstname").orElseThrow().getValues().set(0, "issueSYNCOPE1099");
-
-        ProvisioningResult<UserTO> created = createUser(userCR);
-        assertNotNull(created);
-
-        // 3. verify that dynamic membership is set and that resource is consequently assigned
-        UserTO user = created.getEntity();
-        String groupKey = group.getKey();
-        assertTrue(user.getDynMemberships().stream().anyMatch(m -> m.getGroupKey().equals(groupKey)));
-        assertTrue(user.getResources().contains(RESOURCE_NAME_TESTDB));
-
-        // 4. verify that propagation happened towards the resource of the dynamic group
-        assertFalse(created.getPropagationStatuses().isEmpty());
-        assertEquals(RESOURCE_NAME_TESTDB, created.getPropagationStatuses().getFirst().getResource());
-    }
-
-    @Test
     public void issueSYNCOPE1166() {
         assumeFalse(IS_NEO4J_PERSISTENCE);
 
         UserCR userCR = UserITCase.getUniqueSample("syncope1166@apache.org");
         UserTO userTO = createUser(userCR).getEntity();
-        assertNotNull(userTO);
 
         UserUR userUR = new UserUR();
         userUR.setKey(userTO.getKey());
@@ -1426,54 +1373,21 @@ public class UserIssuesITCase extends AbstractITCase {
     }
 
     @Test
-    public void issueSYNCOPE1206() {
-        // 1. create group with dynamic user condition 'cool==true'
-        GroupCR dynGroupCR = GroupITCase.getSample("syncope1206");
-        dynGroupCR.setUDynMembershipCond(
-                SyncopeClient.getUserSearchConditionBuilder().is("cool").equalTo("true").query());
-        GroupTO dynGroup = createGroup(dynGroupCR).getEntity();
-        assertNotNull(dynGroup);
-        assertTrue(dynGroup.getResources().contains(RESOURCE_NAME_LDAP));
-
-        // 2. create user (no value for cool, no dynamic membership, no propagation to LDAP)
-        UserCR userCR = UserITCase.getUniqueSample("syncope1206@apache.org");
-        userCR.getResources().clear();
-
-        ProvisioningResult<UserTO> result = createUser(userCR);
-        assertTrue(result.getPropagationStatuses().isEmpty());
-
-        // 3. update user to match the dynamic condition: expect propagation to LDAP
-        UserUR userUR = new UserUR();
-        userUR.setKey(result.getEntity().getKey());
-        userUR.getPlainAttrs().add(new AttrPatch.Builder(attr("cool", "true")).build());
-
-        result = updateUser(userUR);
-        assertEquals(1, result.getPropagationStatuses().size());
-        assertEquals(RESOURCE_NAME_LDAP, result.getPropagationStatuses().getFirst().getResource());
-
-        // 4. update again user to not match the dynamic condition any more: expect propagation to LDAP
-        userUR = new UserUR();
-        userUR.setKey(result.getEntity().getKey());
-        userUR.getPlainAttrs().add(new AttrPatch.Builder(attr("cool", "false")).build());
-
-        result = updateUser(userUR);
-        assertEquals(1, result.getPropagationStatuses().size());
-        assertEquals(RESOURCE_NAME_LDAP, result.getPropagationStatuses().getFirst().getResource());
-    }
-
-    @Test
     public void issueSYNCOPE1337() {
         // 0. save current cipher algorithm and set it to something salted
-        String original =
-                confParamOps.get(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", null, String.class);
+        String original = confParamOps.get(
+                SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, null, String.class);
 
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", CipherAlgorithm.SSHA512.name());
+        confParamOps.set(
+                SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM,
+                CipherAlgorithm.SSHA512.name());
 
         // 1. ensure that password policy is properly set for /even/two
         PasswordPolicyTO pwdPolicy = POLICY_SERVICE.read(PolicyType.PASSWORD, "ce93fcda-dc3a-4369-a7b0-a6108c261c85");
         assertEquals(1, pwdPolicy.getHistoryLength());
 
-        RealmTO evenTwo = REALM_SERVICE.search(new RealmQuery.Builder().keyword("two").build()).getResult().getFirst();
+        RealmTO evenTwo = REALM_SERVICE.search(new RealmQuery.Builder().fiql("name==two").build())
+                .getResult().getFirst();
         evenTwo.setPasswordPolicy(pwdPolicy.getKey());
         REALM_SERVICE.update(evenTwo);
 
@@ -1483,7 +1397,6 @@ public class UserIssuesITCase extends AbstractITCase {
             userCR.setPassword("Password123");
             userCR.setRealm("/even/two");
             UserTO userTO = createUser(userCR).getEntity();
-            assertNotNull(userTO);
 
             // 3. attempt to set the same password value: fails
             UserUR req = new UserUR();
@@ -1499,16 +1412,14 @@ public class UserIssuesITCase extends AbstractITCase {
 
             // 4. set another password value: works
             req.setPassword(new PasswordPatch.Builder().onSyncope(true).value("Password124").build());
-            userTO = updateUser(req).getEntity();
-            assertNotNull(userTO);
+            assertDoesNotThrow(() -> updateUser(req).getEntity());
 
             // 5. set the original password value: works (history length is 1)
             req.setPassword(new PasswordPatch.Builder().onSyncope(true).value("Password123").build());
-            userTO = updateUser(req).getEntity();
-            assertNotNull(userTO);
+            assertDoesNotThrow(() -> updateUser(req).getEntity());
         } finally {
             // finally revert the cipher algorithm
-            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "password.cipher.algorithm", original);
+            confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_CIPHER_ALGORITHM, original);
         }
     }
 
@@ -1582,8 +1493,7 @@ public class UserIssuesITCase extends AbstractITCase {
         assertEquals(Response.Status.BAD_REQUEST.getStatusCode(), response.getStatus());
 
         // reading user by its username still works
-        userTO = USER_SERVICE.read(req.getUsername().getValue());
-        assertNotNull(userTO);
+        assertDoesNotThrow(() -> USER_SERVICE.read(req.getUsername().getValue()));
     }
 
     @Test
@@ -1993,5 +1903,56 @@ public class UserIssuesITCase extends AbstractITCase {
                     .orderBy("ctype DESC")
                     .build()).getResult().forEach(u -> deleteUser(u.getKey()));
         }
+    }
+
+    @Test
+    public void issueSYNCOPE1965() {
+        // 1. create a sample user with a manager and propagate on LDAP
+        UserCR userCR = UserITCase.getUniqueSample("issuesyncope1965@syncope.apache.org");
+        userCR.getResources().add(RESOURCE_NAME_TESTDB);
+        userCR.setPassword("Password123!");
+        userCR.setUManager(USER_SERVICE.read("puccini").getKey());
+        ProvisioningResult<UserTO> pr = createUser(userCR);
+        assertEquals(ExecStatus.SUCCESS, pr.getPropagationStatuses().getFirst().getStatus());
+        assertNotNull(pr.getEntity().getUManager());
+        // 2. pull from resource-testdb
+        PullTaskTO pullTaskTO = new PullTaskTO();
+        pullTaskTO.setPerformCreate(true);
+        pullTaskTO.setPerformUpdate(true);
+        pullTaskTO.setDestinationRealm(SyncopeConstants.ROOT_REALM);
+        pullTaskTO.setMatchingRule(MatchingRule.UPDATE);
+        pullTaskTO.setUnmatchingRule(UnmatchingRule.ASSIGN);
+        RECONCILIATION_SERVICE.pull(
+                new ReconQuery.Builder(AnyTypeKind.USER.name(), RESOURCE_NAME_TESTDB).anyKey(pr.getEntity().getKey())
+                        .build(), pullTaskTO);
+        // user manager should be kept
+        UserTO updatedUser = USER_SERVICE.read(pr.getEntity().getKey());
+        assertNotNull(updatedUser.getUManager());
+        assertEquals(USER_SERVICE.read("puccini").getKey(), updatedUser.getUManager());
+
+        // perform the same check on a group
+        GroupCR groupCR = GroupITCase.getSample("issue1965grp");
+        groupCR.getResources().add(RESOURCE_NAME_LDAP);
+        groupCR.setGManager(GROUP_SERVICE.read("managingDirector").getKey());
+        ProvisioningResult<GroupTO> prGrp = createGroup(groupCR);
+        assertEquals(ExecStatus.SUCCESS, prGrp.getPropagationStatuses().getFirst().getStatus());
+        assertNotNull(prGrp.getEntity().getGManager());
+        assertEquals(GROUP_SERVICE.read("managingDirector").getKey(), prGrp.getEntity().getGManager());
+
+        // 2. pull from resource-ldap
+        pullTaskTO = new PullTaskTO();
+        pullTaskTO.setPerformCreate(true);
+        pullTaskTO.setPerformUpdate(true);
+        pullTaskTO.getActions().add("LDAPMembershipPullActions");
+        pullTaskTO.setDestinationRealm(SyncopeConstants.ROOT_REALM);
+        pullTaskTO.setMatchingRule(MatchingRule.UPDATE);
+        pullTaskTO.setUnmatchingRule(UnmatchingRule.ASSIGN);
+        RECONCILIATION_SERVICE.pull(
+                new ReconQuery.Builder(AnyTypeKind.USER.name(), RESOURCE_NAME_LDAP).anyKey(pr.getEntity().getKey())
+                        .build(), pullTaskTO);
+        // group manager should be kept
+        GroupTO updatedGrp = GROUP_SERVICE.read(prGrp.getEntity().getKey());
+        assertNotNull(updatedGrp.getGManager());
+        assertEquals(GROUP_SERVICE.read("managingDirector").getKey(), updatedGrp.getGManager());
     }
 }

@@ -18,8 +18,6 @@
  */
 package org.apache.syncope.client.enduser;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.giffing.wicket.spring.boot.starter.app.WicketBootSecuredWebApplication;
 import de.agilecoders.wicket.core.Bootstrap;
 import de.agilecoders.wicket.core.settings.BootstrapSettings;
@@ -39,19 +37,23 @@ import org.apache.syncope.client.enduser.pages.SelfConfirmPasswordReset;
 import org.apache.syncope.client.enduser.panels.Sidebar;
 import org.apache.syncope.client.lib.SyncopeAnonymousClient;
 import org.apache.syncope.client.lib.SyncopeClientFactoryBean;
-import org.apache.syncope.client.ui.commons.BaseLogin;
 import org.apache.syncope.client.ui.commons.BaseWebApplication;
+import org.apache.syncope.client.ui.commons.DynamicMenuStringResourceLoader;
 import org.apache.syncope.client.ui.commons.SyncopeUIRequestCycleListener;
+import org.apache.syncope.client.ui.commons.annotations.ExtPage;
 import org.apache.syncope.client.ui.commons.annotations.Resource;
+import org.apache.syncope.client.ui.commons.pages.BaseLogin;
 import org.apache.syncope.client.ui.commons.themes.AdminLTE;
 import org.apache.syncope.common.keymaster.client.api.ServiceOps;
 import org.apache.syncope.common.keymaster.client.api.model.NetworkService;
+import org.apache.syncope.common.lib.jackson.SyncopeJsonMapper;
 import org.apache.wicket.Page;
 import org.apache.wicket.Session;
 import org.apache.wicket.WicketRuntimeException;
 import org.apache.wicket.authorization.IAuthorizationStrategy;
 import org.apache.wicket.authorization.IAuthorizationStrategy.AllowAllAuthorizationStrategy;
 import org.apache.wicket.authroles.authentication.AbstractAuthenticatedWebSession;
+import org.apache.wicket.csp.CSPDirective;
 import org.apache.wicket.markup.html.WebPage;
 import org.apache.wicket.protocol.http.ResourceIsolationRequestCycleListener;
 import org.apache.wicket.protocol.http.WebApplication;
@@ -68,12 +70,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.core.io.ResourceLoader;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 public class SyncopeWebApplication extends WicketBootSecuredWebApplication implements BaseWebApplication {
 
     protected static final Logger LOG = LoggerFactory.getLogger(SyncopeWebApplication.class);
 
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
+    protected static final JsonMapper MAPPER = new SyncopeJsonMapper();
 
     public static SyncopeWebApplication get() {
         return (SyncopeWebApplication) WebApplication.get();
@@ -91,18 +95,22 @@ public class SyncopeWebApplication extends WicketBootSecuredWebApplication imple
 
     protected UserFormLayoutInfo customFormLayout;
 
+    protected final DynamicMenuStringResourceLoader dynamicMenuStringResourceLoader;
+
     public SyncopeWebApplication(
             final ResourceLoader resourceLoader,
             final EnduserProperties props,
             final ClassPathScanImplementationLookup lookup,
             final ServiceOps serviceOps,
-            final List<IResource> resources) {
+            final List<IResource> resources,
+            final DynamicMenuStringResourceLoader dynamicMenuStringResourceLoader) {
 
         this.resourceLoader = resourceLoader;
         this.props = props;
         this.lookup = lookup;
         this.serviceOps = serviceOps;
         this.resources = resources;
+        this.dynamicMenuStringResourceLoader = dynamicMenuStringResourceLoader;
     }
 
     protected SyncopeUIRequestCycleListener buildSyncopeUIRequestCycleListener() {
@@ -141,7 +149,7 @@ public class SyncopeWebApplication extends WicketBootSecuredWebApplication imple
             getRequestCycleListeners().add(new ResourceIsolationRequestCycleListener());
         }
 
-        getCspSettings().blocking().unsafeInline();
+        getCspSettings().blocking().unsafeInline().add(CSPDirective.IMG_SRC, "data:");
 
         getRequestCycleListeners().add(new IRequestCycleListener() {
 
@@ -203,6 +211,23 @@ public class SyncopeWebApplication extends WicketBootSecuredWebApplication imple
             }
         }
 
+        final List<Class<? extends BasePage>> amPageClasses = lookup.getAMPageClasses();
+        amPageClasses.forEach(claz -> {
+            dynamicMenuStringResourceLoader.register("menu." + claz.getSimpleName(), claz);
+        });
+
+        final List<Class<? extends BasePage>> idmPageClasses = lookup.getIdMPageClasses();
+        idmPageClasses.forEach(claz -> {
+            dynamicMenuStringResourceLoader.register("menu." + claz.getSimpleName(), claz);
+        });
+
+        final List<Class<? extends BasePage>> extPageClasses = lookup.getExtPageClasses();
+        extPageClasses.stream().filter(claz -> (claz.isAnnotationPresent(ExtPage.class))).forEach(claz -> {
+            dynamicMenuStringResourceLoader.register("menu." + claz.getSimpleName(), claz);
+        });
+
+        getResourceSettings().getStringResourceLoaders().add(dynamicMenuStringResourceLoader);
+
         try (InputStream is = resourceLoader.getResource(props.getCustomFormLayout()).getInputStream()) {
             customFormLayout = MAPPER.readValue(is, new TypeReference<>() {
             });
@@ -235,8 +260,7 @@ public class SyncopeWebApplication extends WicketBootSecuredWebApplication imple
 
     @Override
     public Class<? extends Page> getHomePage() {
-        return SyncopeEnduserSession.get().isAuthenticated()
-                && SyncopeEnduserSession.get().isMustChangePassword()
+        return SyncopeEnduserSession.get().isMustChangePassword()
                 ? MustChangePassword.class
                 : SyncopeEnduserSession.get().isAuthenticated()
                 ? getPageClass("profile", Dashboard.class)
