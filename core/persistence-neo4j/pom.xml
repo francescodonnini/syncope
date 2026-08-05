@@ -211,5 +211,75 @@ under the License.
         </plugins>
       </build>
     </profile>
+
+    <profile>
+      <id>neo4j-fra</id>
+
+      <build>
+        <defaultGoal>clean verify</defaultGoal>
+
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration>
+              <includes>
+                <include>**/Neo4jAnySearchDAOTest.java</include>
+              </includes>
+              <systemPropertyVariables>
+                <NEO4J_CONTAINER_IP>${docker.container.neo4j.ip}</NEO4J_CONTAINER_IP>
+              </systemPropertyVariables>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>io.fabric8</groupId>
+            <artifactId>docker-maven-plugin</artifactId>
+            <configuration>
+              <images>
+                <image>
+                  <alias>neo4j</alias>
+                  <name>neo4j:${docker.neo4j.version}</name>
+                  <run>
+                    <env>
+                      <NEO4J_AUTH>none</NEO4J_AUTH>
+                      <NEO4J_PLUGINS>["apoc"]</NEO4J_PLUGINS>
+                      <NEO4J_dbms_security_procedures_unrestricted>apoc.*</NEO4J_dbms_security_procedures_unrestricted>
+                    </env>
+                    <wait>
+                      <log>Started.</log>
+                      <time>30000</time>
+                    </wait>
+                    <tmpfs>
+                      <mount>/data:rw</mount>
+                      <mount>/logs:rw</mount>
+                      <mount>/var/lib/neo4j/data:rw</mount>
+                      <mount>/var/lib/neo4j/logs:rw</mount>
+                      <mount>/var/lib/neo4j/metrics:rw</mount>
+                    </tmpfs>
+                  </run>
+                </image>
+              </images>
+            </configuration>
+            <executions>
+              <execution>
+                <id>start-neo4j</id>
+                <phase>pre-integration-test</phase>
+                <goals>
+                  <goal>start</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>stop-neo4j</id>
+                <phase>post-integration-test</phase>
+                <goals>
+                  <goal>stop</goal>
+                  <goal>remove</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

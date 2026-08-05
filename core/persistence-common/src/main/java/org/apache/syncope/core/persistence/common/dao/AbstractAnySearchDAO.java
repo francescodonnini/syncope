@@ -63,7 +63,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.util.CollectionUtils;
 
-public abstract class AbstractAnySearchDAO implements AnySearchDAO {
+public abstract class  AbstractAnySearchDAO implements AnySearchDAO {
 
     protected record CheckResult<C extends AttrCond>(PlainSchema schema, PlainAttrValue value, C cond) {
 

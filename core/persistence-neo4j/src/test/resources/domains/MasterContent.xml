@@ -1,0 +1,960 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+<dataset>
+  <SyncopeRole id="Admin"
+               entitlements='["USER_SEARCH", "REALM_SEARCH", "USER_READ"]' />
+  <SyncopeRole id="Manager"
+               entitlements='["USER_SEARCH", "REALM_SEARCH", "USER_READ"]' />
+  <SyncopeRole id="Employee"
+               entitlements='["USER_READ"]' />
+
+  <Realm id="30159ad9-c68e-4e67-a2dc-9d8f0d01bac3"
+         name="/"
+         fullPath="/" />
+  <Realm id="831c0533-9da7-4887-98b8-1f48a2230d62"
+         name="scranton"
+         fullPath="/scranton" />
+  <Realm id="ac936eff-876a-43f2-9785-f479dac94f3a"
+         name="sales"
+         fullPath="/scranton/sales" />
+  <Realm id="9217ab67-3634-4304-b8af-75edc270b109"
+         name="accounting"
+         fullPath="/scranton/accounting" />
+  <Realm id="823733b9-62aa-42a2-ab95-ef9734851f41"
+         name="warehouse"
+         fullPath="/scranton/warehouse"  />
+  <Realm id="b17a2d20-1463-4718-b7d2-dc4f3ea4a014"
+         name="customer_service"
+         fullPath="/scranton/customer_service" />
+  <Realm id="07a30932-effe-4088-8f2a-5e0b402edff8"
+         name="qa"
+         fullPath="/scranton/qa" />
+  <Realm id="461d7a73-7ef0-4437-b219-5caeb91107bc"
+         name="supplier_relations"
+         fullPath="/scranton/supplier_relations" />
+
+  <!-- /scranton -->
+  <Realm_Realm left="831c0533-9da7-4887-98b8-1f48a2230d62"
+               right="30159ad9-c68e-4e67-a2dc-9d8f0d01bac3"/>
+  <!-- /scranton/sales -->
+  <Realm_Realm left="ac936eff-876a-43f2-9785-f479dac94f3a"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+  <!-- /scranton/accounting -->
+  <Realm_Realm left="9217ab67-3634-4304-b8af-75edc270b109"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+  <!-- /scranton/warehouse -->
+  <Realm_Realm left="823733b9-62aa-42a2-ab95-ef9734851f41"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+  <!-- /scranton/customer_service -->
+  <Realm_Realm left="b17a2d20-1463-4718-b7d2-dc4f3ea4a014"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+  <!-- /scranton/qa -->
+  <Realm_Realm left="07a30932-effe-4088-8f2a-5e0b402edff8"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+  <!-- /scranton/supplier_relations -->
+  <Realm_Realm left="461d7a73-7ef0-4437-b219-5caeb91107bc"
+               right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+
+  <!-- SCHEMA -->
+  <AnyType id="USER" kind="USER" />
+  <AnyTypeClass id="BaseUser" />
+  <AnyType_AnyTypeClass left="USER" right="BaseUser" />
+  <PlainSchema
+          id="email"
+          type="String"
+          mandatoryCondition="false"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0" />
+  <PlainSchema_AnyTypeClass
+          left="email"
+          right="BaseUser" />
+  <Implementation id="EmailAddressValidator"
+                  type="ATTR_VALUE_VALIDATOR"
+                  engine="JAVA"
+                  body="org.apache.syncope.core.persistence.common.attrvalue.EmailAddressValidator" />
+  <PlainSchema_Implementation type="PLAIN_SCHEMA_ATTR_VALUE_VALIDATOR"
+                              left="email"
+                              right="EmailAddressValidator" />
+  <PlainSchema
+          id="firstname"
+          type="String"
+          labels='{"en":"Firstname", "it":"Nome"}'
+          mandatoryCondition="false"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0" />
+  <PlainSchema_AnyTypeClass
+          left="firstname"
+          right="BaseUser" />
+  <PlainSchema
+          id="lastname"
+          type="String"
+          labels='{"en":"Lastname", "it":"Cognome"}'
+          mandatoryCondition="false"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0" />
+  <PlainSchema_AnyTypeClass
+          left="lastname"
+          right="BaseUser" />
+  <PlainSchema
+          id="gender"
+          type="Enum"
+          labels='{"en":"Gender", "it":"Sesso"}'
+          mandatoryCondition="false"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0"
+          enumValues='{"M":"Male","F":"Female"}' />
+  <PlainSchema_AnyTypeClass
+          left="gender"
+          right="BaseUser" />
+  <PlainSchema
+          id="title"
+          type="String"
+          labels='{"en":"Title", "it":"Titolo"}'
+          mandatoryCondition="true"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0" />
+  <PlainSchema_AnyTypeClass
+          left="title"
+          right="BaseUser" />
+  <AnyTypeClass id="SalesRecord" />
+  <PlainSchema  id="numberOfSales"
+                type="Long"
+                anyTypeClass_id="SalesRecord"
+                mandatoryCondition="false"
+                multivalue="0"
+                uniqueConstraint="0"
+                readonly="0" />
+
+  <AnyType id="PRINTER" kind="ANY_OBJECT"/>
+  <AnyTypeClass id="BasePrinter"/>
+  <AnyType_AnyTypeClass anyType_id="PRINTER" anyTypeClass_id="BasePrinter"/>
+
+  <PlainSchema id="model"
+               type="String"
+               anyTypeClass_id="BasePrinter"
+               mandatoryCondition="false"
+               multivalue="0"
+               uniqueConstraint="0"
+               readonly="0"/>
+  <PlainSchema id="location"
+               type="String"
+               anyTypeClass_id="BasePrinter"
+               mandatoryCondition="false"
+               multivalue="0"
+               uniqueConstraint="0"
+               readonly="0"/>
+
+  <!-- Relationships -->
+  <RelationshipType id="print_access" description="can use the printer" />
+  <RelationshipType_AnyType type="RELATIONSHIPTYPE_LEFT_END_ANYTYPE"
+                            left="print_access" right="USER" />
+  <RelationshipType_AnyType type="RELATIONSHIPTYPE_RIGHT_END_ANYTYPE"
+                            left="print_access" right="PRINTER" />
+
+  <RelationshipType id="proximity" description="an object is near another object" />
+  <RelationshipType_AnyType type="RELATIONSHIPTYPE_LEFT_END_ANYTYPE"
+                            left="proximity" right="PRINTER" />
+  <RelationshipType_AnyType type="RELATIONSHIPTYPE_RIGHT_END_ANYTYPE"
+                            left="proximity" right="PRINTER" />
+
+  <AnyType id="GROUP" kind="GROUP" />
+  <AnyTypeClass id="BaseGroup" />
+  <AnyType_AnyTypeClass left="GROUP" right="BaseGroup" />
+  <PlainSchema
+          id="creationDate"
+          type="Date"
+          mandatoryCondition="false"
+          multivalue="0"
+          uniqueConstraint="0"
+          readonly="0"
+          conversionPattern="yyyy-MM-dd" />
+  <PlainSchema_AnyTypeClass
+          left="creationDate"
+          right="BaseGroup" />
+
+  <SyncopeRole id="GROUP_OWNER"
+               entitlements='["USER_SEARCH", "USER_READ", "REALM_SEARCH", "GROUP_SEARCH", "GROUP_READ"]' />
+
+  <!-- Scranton's Management Group -->
+  <SyncopeGroup id="6d7c106f-daff-4bf6-8aee-8cbd961eb01e"
+                name="Management"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"2005-04-12T14:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="6d7c106f-daff-4bf6-8aee-8cbd961eb01e"
+                      right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+
+  <!-- Scranton's Finer Things Club -->
+  <SyncopeGroup id="0ebf427f-3fdf-4112-84cd-4149b4742398"
+                name="FinerThingsClub"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"2005-03-03T10:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="0ebf427f-3fdf-4112-84cd-4149b4742398"
+                      right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+
+  <!-- Scranton's Party Planning Committee -->
+  <SyncopeGroup id="5b20001a-a5d3-4461-a2f0-5a5c746ae14c"
+                name="PartyPlanningCommittee"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"2005-12-15T11:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="5b20001a-a5d3-4461-a2f0-5a5c746ae14c"
+                      right="831c0533-9da7-4887-98b8-1f48a2230d62"/>
+
+  <SyncopeGroup id="4afd4117-d792-4f9e-8485-0720f7e39285"
+                name="Scientists"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"1750-06-23T14:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="4afd4117-d792-4f9e-8485-0720f7e39285"
+                      right="823733b9-62aa-42a2-ab95-ef9734851f41"/>
+
+  <SyncopeGroup id="sales-printers-group-id"
+                name="SalesDeptPrinters"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"2012-12-12T10:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="0ebf427f-3fdf-4112-84cd-4149b4742398"
+                      right="9217ab67-3634-4304-b8af-75edc270b109"/>
+
+  <SyncopeGroup id="acc-printers-group-id"
+                name="AccDeptPrinters"
+                status="active"
+                plainAttrs.creationDate='{"values":[{"dateValue":"2012-12-12T10:00:00+01:00"}]}'/>
+  <SyncopeGroup_Realm left="0ebf427f-3fdf-4112-84cd-4149b4742398"
+                      right="823733b9-62aa-42a2-ab95-ef9734851f41"/>
+
+  <!-- USERS -->
+  <SyncopeUser id="4992e9cb-0174-4de6-80d1-f592bad2ece5"
+               username="dwallace"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"David"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Wallace"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"dwallace@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"cfo"}]}'/>
+  <SyncopeUser_Realm left="4992e9cb-0174-4de6-80d1-f592bad2ece5"
+                     right="30159ad9-c68e-4e67-a2dc-9d8f0d01bac3" />
+  <SyncopeUser_SyncopeRole left="4992e9cb-0174-4de6-80d1-f592bad2ece5"
+                           right="Admin" />
+
+  <SyncopeUser id="74ba69cc-d26a-4884-b184-8e1fe2188abd"
+               username="jlevinson"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Janet"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Levinson"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"jlevinson@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"vp"}]}'/>
+  <SyncopeUser_Realm left="74ba69cc-d26a-4884-b184-8e1fe2188abd"
+                     right="30159ad9-c68e-4e67-a2dc-9d8f0d01bac3" />
+  <SyncopeUser_SyncopeRole left="74ba69cc-d26a-4884-b184-8e1fe2188abd"
+                           right="Admin" />
+
+  <SyncopeUser id="f5d7debd-2b60-4870-8e8b-87cc7b29ef91"
+               username="rcalifornia"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Robert"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"California"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"rcalifornia@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"ceo"}]}'/>
+  <SyncopeUser_Realm left="f5d7debd-2b60-4870-8e8b-87cc7b29ef91"
+                     right="30159ad9-c68e-4e67-a2dc-9d8f0d01bac3" />
+  <SyncopeUser_SyncopeRole left="f5d7debd-2b60-4870-8e8b-87cc7b29ef91"
+                           right="Admin" />
+
+  <SyncopeUser id="28a2245f-8e75-4c5b-8416-19bd44c316a8"
+               username="mscott"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Michael"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Scott"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"mscott@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"regional manager"}]}'/>
+  <SyncopeUser_Realm left="28a2245f-8e75-4c5b-8416-19bd44c316a8"
+                     right="831c0533-9da7-4887-98b8-1f48a2230d62" />
+  <SyncopeUser_SyncopeRole left="28a2245f-8e75-4c5b-8416-19bd44c316a8"
+                           right="Manager" />
+
+  <!-- (Michael Scott) <-> Scranton's Management Group -->
+  <UMembership              id="52b89f4b-56f4-4ba6-a6cb-6f04b8a885e8" />
+  <UMembership_SyncopeUser  left="52b89f4b-56f4-4ba6-a6cb-6f04b8a885e8" right="28a2245f-8e75-4c5b-8416-19bd44c316a8"/>
+  <UMembership_SyncopeGroup left="52b89f4b-56f4-4ba6-a6cb-6f04b8a885e8" right="6d7c106f-daff-4bf6-8aee-8cbd961eb01e" />
+
+  <SyncopeUser id="56023e19-2d27-4d10-bd65-0568c4179060"
+               username="rhoward"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Ryan"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Howard"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"rhoward@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"intern"}]}'/>
+  <SyncopeUser_Realm left="56023e19-2d27-4d10-bd65-0568c4179060"
+                     right="831c0533-9da7-4887-98b8-1f48a2230d62" />
+
+  <SyncopeUser id="aa3a696e-b839-48de-bf03-95b4e40bbc5a"
+               username="tflenderson"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Toby"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Flenderson"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"tflenderson@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="aa3a696e-b839-48de-bf03-95b4e40bbc5a"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="aa3a696e-b839-48de-bf03-95b4e40bbc5a"
+                           right="Employee" />
+
+  <!-- (Toby Flenderson) <-> FinerThingsClub -->
+  <UMembership              id="5204791c-0a76-43a4-994a-33b0088c200f" />
+  <UMembership_SyncopeUser  left="5204791c-0a76-43a4-994a-33b0088c200f" right="aa3a696e-b839-48de-bf03-95b4e40bbc5a"/>
+  <UMembership_SyncopeGroup left="5204791c-0a76-43a4-994a-33b0088c200f" right="0ebf427f-3fdf-4112-84cd-4149b4742398" />
+
+
+  <SyncopeUser id="051708f2-aed2-462a-bb7b-ca3987a8eb94"
+               username="pbeesly"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Pam"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Beesly"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"pbeesly@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue": 874}]}'/>
+  <SyncopeUser_Realm left="051708f2-aed2-462a-bb7b-ca3987a8eb94"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="051708f2-aed2-462a-bb7b-ca3987a8eb94"
+                           right="Employee" />
+
+  <!-- (Pam Beesly) <-> FinerThingsClub -->
+  <UMembership              id="1c4e06c2-dc8b-4150-adc5-a8c3bfb0295f" />
+  <UMembership_SyncopeUser  left="1c4e06c2-dc8b-4150-adc5-a8c3bfb0295f" right="051708f2-aed2-462a-bb7b-ca3987a8eb94"/>
+  <UMembership_SyncopeGroup left="1c4e06c2-dc8b-4150-adc5-a8c3bfb0295f" right="0ebf427f-3fdf-4112-84cd-4149b4742398" />
+  <!-- (Pam Beesly) <-> PartyPlanningCommittee -->
+  <UMembership              id="54558f78-9867-41f5-b4b8-d0bcbf55796b" />
+  <UMembership_SyncopeUser  left="54558f78-9867-41f5-b4b8-d0bcbf55796b" right="051708f2-aed2-462a-bb7b-ca3987a8eb94"/>
+  <UMembership_SyncopeGroup left="54558f78-9867-41f5-b4b8-d0bcbf55796b" right="5b20001a-a5d3-4461-a2f0-5a5c746ae14c"/>
+
+  <SyncopeUser id="5f2a078b-7b01-40e3-a847-625681bf9365"
+               username="dschrute"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Dwight"}, {"stringValue":"Kurt"}, {"stringValue":"III"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Schrute"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"dschrute@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"assistant to the regional manager"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue":3215}]}' />
+  <SyncopeUser_Realm left="5f2a078b-7b01-40e3-a847-625681bf9365"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="5f2a078b-7b01-40e3-a847-625681bf9365"
+                           right="Employee" />
+  <SyncopeUser_AnyTypeClass left="5f2a078b-7b01-40e3-a847-625681bf9365"
+                            right="SalesRecord" />
+
+  <!-- (Dwight Schrute) <-> (Scranton's Management Group) -->
+  <UMembership              id="a4984af1-6a6d-4f18-8c73-b93e378866b7" />
+  <UMembership_SyncopeUser  left="a4984af1-6a6d-4f18-8c73-b93e378866b7" right="5f2a078b-7b01-40e3-a847-625681bf9365"/>
+  <UMembership_SyncopeGroup left="a4984af1-6a6d-4f18-8c73-b93e378866b7" right="6d7c106f-daff-4bf6-8aee-8cbd961eb01e" />
+
+  <SyncopeUser id="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf"
+               username="jhalpert"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Jim"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Halpert"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"jhalpert@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue":1450}]}'/>
+  <SyncopeUser_Realm left="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf"
+                           right="Employee" />
+  <SyncopeUser_AnyTypeClass left="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf"
+                            right="SalesRecord" />
+  <!-- (Jim Halpert) <-> FinerThingsClub -->
+  <UMembership              id="30fc4274-82b6-4c0f-a28d-471cd57b55fb" />
+  <UMembership_SyncopeUser  left="30fc4274-82b6-4c0f-a28d-471cd57b55fb" right="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf"/>
+  <UMembership_SyncopeGroup left="30fc4274-82b6-4c0f-a28d-471cd57b55fb" right="0ebf427f-3fdf-4112-84cd-4149b4742398" />
+
+  <SyncopeUser id="e933e25e-2c3c-4341-a3c7-21374e0bcc15"
+               username="abernard"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Andy"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Bernard"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"abernard@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue": 332}]}' />
+  <SyncopeUser_Realm left="e933e25e-2c3c-4341-a3c7-21374e0bcc15"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="e933e25e-2c3c-4341-a3c7-21374e0bcc15"
+                           right="Employee" />
+
+  <SyncopeUser id="cd538ac6-0d17-49cd-900a-40334e848a44"
+               username="shudson"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Stanley"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Hudson"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"shudson@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue":33}]}' />
+  <SyncopeUser_Realm left="cd538ac6-0d17-49cd-900a-40334e848a44"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="cd538ac6-0d17-49cd-900a-40334e848a44"
+                           right="Employee" />
+  <SyncopeUser_AnyTypeClass left="cd538ac6-0d17-49cd-900a-40334e848a44"
+                            right="SalesRecord" />
+
+  <SyncopeUser id="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4"
+               username="amartin"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Angela"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Martin"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"amartin@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4"
+                     right="9217ab67-3634-4304-b8af-75edc270b109" />
+  <SyncopeUser_SyncopeRole left="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4"
+                           right="Employee" />
+
+  <!-- (Angela Martin) <-> PartyPlanningCommittee -->
+  <UMembership              id="c54eabca-5992-4519-93a1-ea5c2a51fe25" />
+  <UMembership_SyncopeUser  left="c54eabca-5992-4519-93a1-ea5c2a51fe25" right="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4"/>
+  <UMembership_SyncopeGroup left="c54eabca-5992-4519-93a1-ea5c2a51fe25" right="5b20001a-a5d3-4461-a2f0-5a5c746ae14c" />
+
+
+  <SyncopeUser id="89c190fa-07c2-4d3c-883c-5401eb04c7dc"
+               username="omartinez"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Oscar"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Martinez"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"omartinez@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="89c190fa-07c2-4d3c-883c-5401eb04c7dc"
+                     right="9217ab67-3634-4304-b8af-75edc270b109" />
+  <SyncopeUser_SyncopeRole left="89c190fa-07c2-4d3c-883c-5401eb04c7dc"
+                           right="Employee" />
+  <!-- (Oscar Martinez) <-> FinerThingsClub -->
+  <UMembership              id="6853189d-1238-47bc-b93b-e3e4c4c2e48a" />
+  <UMembership_SyncopeUser  left="6853189d-1238-47bc-b93b-e3e4c4c2e48a" right="89c190fa-07c2-4d3c-883c-5401eb04c7dc"/>
+  <UMembership_SyncopeGroup left="6853189d-1238-47bc-b93b-e3e4c4c2e48a" right="0ebf427f-3fdf-4112-84cd-4149b4742398" />
+
+
+  <SyncopeUser id="441c61fe-e461-4ab3-b276-575e91f550bc"
+               username="kmalone"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Kevin"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Malone"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"kmalone@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="441c61fe-e461-4ab3-b276-575e91f550bc"
+                     right="9217ab67-3634-4304-b8af-75edc270b109" />
+  <SyncopeUser_SyncopeRole left="441c61fe-e461-4ab3-b276-575e91f550bc"
+                           right="Employee" />
+
+  <SyncopeUser id="0898ce37-e9bc-4a62-91a5-5c5ce4fa58cd"
+               username="plapin"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Phyllis"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Lapin"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"plapin@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'
+               plainAttrs.numberOfSales='{"values":[{"longValue":145}]}'/>
+  <SyncopeUser_Realm left="0898ce37-e9bc-4a62-91a5-5c5ce4fa58cd"
+                     right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <SyncopeUser_SyncopeRole left="0898ce37-e9bc-4a62-91a5-5c5ce4fa58cd"
+                           right="Employee" />
+  <SyncopeUser_AnyTypeClass left="0898ce37-e9bc-4a62-91a5-5c5ce4fa58cd"
+                            right="SalesRecord" />
+
+  <!-- (Phyllis Lapin) <-> PartyPlanningCommittee -->
+  <UMembership              id="bee07d2f-1c6b-4120-aff5-63170f577b9c" />
+  <UMembership_SyncopeUser  left="bee07d2f-1c6b-4120-aff5-63170f577b9c" right="0898ce37-e9bc-4a62-91a5-5c5ce4fa58cd"/>
+  <UMembership_SyncopeGroup left="bee07d2f-1c6b-4120-aff5-63170f577b9c" right="5b20001a-a5d3-4461-a2f0-5a5c746ae14c" />
+
+
+  <SyncopeUser id="074f36ed-abc0-40af-a3a4-7b8b4c0f426f"
+               username="dphilbin"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Derryl"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Philbin"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"dphilbin@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="074f36ed-abc0-40af-a3a4-7b8b4c0f426f"
+                     right="823733b9-62aa-42a2-ab95-ef9734851f41" />
+  <SyncopeUser_SyncopeRole left="074f36ed-abc0-40af-a3a4-7b8b4c0f426f"
+                           right="Employee" />
+
+  <UMembership              id="4c26d4ea-7ac4-4fd8-b7f8-c8cb753fcea9" />
+  <UMembership_SyncopeUser  left="4c26d4ea-7ac4-4fd8-b7f8-c8cb753fcea9" right="074f36ed-abc0-40af-a3a4-7b8b4c0f426f"/>
+  <UMembership_SyncopeGroup left="4c26d4ea-7ac4-4fd8-b7f8-c8cb753fcea9" right="6d7c106f-daff-4bf6-8aee-8cbd961eb01e" />
+
+
+  <SyncopeUser id="3656505d-6c87-4d02-a98d-4c0ab698181d"
+               username="randerson"
+               status="suspended"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Roy"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Anderson"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"randerson@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                     right="823733b9-62aa-42a2-ab95-ef9734851f41" />
+  <SyncopeUser_SyncopeRole left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                           right="Employee" />
+
+  <SyncopeUser id="e23254e0-f95b-4b68-90bc-3f70b87a6c32"
+               username="mcurie"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Maria"}, {"stringValue":"Salomea"]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Curie"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"mcurie@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                     right="823733b9-62aa-42a2-ab95-ef9734851f41" />
+  <SyncopeUser_SyncopeRole left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                           right="Chemist" />
+  <!-- (Curie) <-> (Scientists) -->
+  <UMembership              id="umem-leuler-scientists" />
+  <UMembership_SyncopeUser  left="umem-leuler-scientists" right="e23254e0-f95b-4b68-90bc-3f70b87a6c32"/>
+  <UMembership_SyncopeGroup left="umem-leuler-scientists" right="4afd4117-d792-4f9e-8485-0720f7e39285"/>
+
+  <SyncopeUser id="f885169c-7b3e-4b81-b94d-380b45d3cc83"
+               username="fgauss"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Johann"}, {"stringValue":"Friedrich"}, {"stringValue":"Carl"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Gauss"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"fgauss@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"mathematician"}]}'/>
+  <SyncopeUser_Realm left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                     right="823733b9-62aa-42a2-ab95-ef9734851f41" />
+  <SyncopeUser_SyncopeRole left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                           right="Employee" />
+  <!-- (Gauss) <-> (Scientists) -->
+  <UMembership              id="umem-fgauss-scientists" />
+  <UMembership_SyncopeUser  left="umem-fgauss-scientists" right="f885169c-7b3e-4b81-b94d-380b45d3cc83"/>
+  <UMembership_SyncopeGroup left="umem-fgauss-scientists" right="4afd4117-d792-4f9e-8485-0720f7e39285"/>
+
+  <SyncopeUser id="e0fe58e7-ac0a-4a98-aa6f-4fb62ed63a9a"
+               username="leuler"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Leonhard"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Euler"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"leuler@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"mathematician"}]}'/>
+  <SyncopeUser_Realm left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                     right="823733b9-62aa-42a2-ab95-ef9734851f41" />
+  <SyncopeUser_SyncopeRole left="3656505d-6c87-4d02-a98d-4c0ab698181d"
+                           right="Employee" />
+  <!-- (Euler) <-> (Scientists) -->
+  <UMembership              id="umem-leuler-scientists" />
+  <UMembership_SyncopeUser  left="umem-leuler-scientists" right="f885169c-7b3e-4b81-b94d-380b45d3cc83"/>
+  <UMembership_SyncopeGroup left="umem-leuler-scientists" right="4afd4117-d792-4f9e-8485-0720f7e39285"/>
+
+
+  <SyncopeUser id="ed12101d-6874-45c2-a978-cd0356afc0a7"
+               username="kkapoor"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Kelly"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Kapoor"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"F"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"kkapoor@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="ed12101d-6874-45c2-a978-cd0356afc0a7"
+                     right="b17a2d20-1463-4718-b7d2-dc4f3ea4a014" />
+  <SyncopeUser_SyncopeRole left="ed12101d-6874-45c2-a978-cd0356afc0a7"
+                           right="Employee" />
+
+  <SyncopeUser id="2aede3c8-387d-4929-a532-0a2c6330e327"
+               username="cbratton"
+               status="active"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Creed"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Bratton"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"cbratton@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="2aede3c8-387d-4929-a532-0a2c6330e327"
+                     right="07a30932-effe-4088-8f2a-5e0b402edff8" />
+  <SyncopeUser_SyncopeRole left="2aede3c8-387d-4929-a532-0a2c6330e327"
+                           right="Employee" />
+
+  <SyncopeUser id="47185ce9-a651-4c93-89b5-0518d0795c6c"
+               username="dwhite"
+               status="suspended"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Devon"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"White"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"dwhite@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="47185ce9-a651-4c93-89b5-0518d0795c6c"
+                     right="07a30932-effe-4088-8f2a-5e0b402edff8" />
+  <SyncopeUser_SyncopeRole left="47185ce9-a651-4c93-89b5-0518d0795c6c"
+                           right="Employee" />
+
+  <SyncopeUser id="72471c99-7ee6-4c37-bc12-317eea0c5670"
+               username="mpalmer"
+               status="suspended"
+               cipherAlgorithm="SHA256"
+               password="password"
+               plainAttrs.firstname='{"values":[{"stringValue":"Meredith"}]}'
+               plainAttrs.lastname='{"values":[{"stringValue":"Palmer"}]}'
+               plainAttrs.gender='{"values":[{"stringValue":"M"}]}'
+               plainAttrs.email='{"values":[{"stringValue":"mpalmer@dundermifflin.org"}]}'
+               plainAttrs.title='{"values":[{"stringValue":"employee"}]}'/>
+  <SyncopeUser_Realm left="72471c99-7ee6-4c37-bc12-317eea0c5670"
+                     right="461d7a73-7ef0-4437-b219-5caeb91107bc" />
+  <SyncopeUser_SyncopeRole left="72471c99-7ee6-4c37-bc12-317eea0c5670"
+                           right="Employee" />
+
+  <!-- (Meredith Palmer) <-> PartyPlanningCommittee -->
+  <UMembership              id="09cce600-fe8d-489b-8b82-358db1527714" />
+  <UMembership_SyncopeUser  left="09cce600-fe8d-489b-8b82-358db1527714" right="72471c99-7ee6-4c37-bc12-317eea0c5670"/>
+  <UMembership_SyncopeGroup left="09cce600-fe8d-489b-8b82-358db1527714" right="5b20001a-a5d3-4461-a2f0-5a5c746ae14c" />
+
+  <!-- Printers -->
+  <AnyObject id="3a207e78-9e67-4e01-9a74-cdfb86a3d601"
+                    name="printer 1"
+                    type="PRINTER"
+                    plainAttrs.model='{"values":[{"stringValue":"HP Color LaserJet Pro"}]}'
+                    plainAttrs.location='{"values":[{"stringValue":"Door"}]}'/>
+  <!-- (printer 1) <-> /scranton/sales -->
+  <AnyObject_Realm left="3a207e78-9e67-4e01-9a74-cdfb86a3d601"
+                   right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <UMembership              id="umem-printer1" />
+  <UMembership_AnyObject    left="umem-printer1" right="3a207e78-9e67-4e01-9a74-cdfb86a3d601"/>
+  <UMembership_SyncopeGroup left="umem-printer1" right="sales-printers-group-id" />
+
+
+  <AnyObject id="95789f9f-85a6-42d5-af9a-a740b1b1d83d"
+             name="printer 2"
+             type="PRINTER"
+             plainAttrs.model='{"values":[{"stringValue":"Canon Inkjet PIXMA"}]}'
+             plainAttrs.location='{"values":[{"stringValue":"Corner"}]}'/>
+
+  <!-- (printer 2) <-> /scranton/accounting -->
+  <AnyObject_Realm left="95789f9f-85a6-42d5-af9a-a740b1b1d83d"
+                   right="9217ab67-3634-4304-b8af-75edc270b109" />
+  <UMembership              id="umem-printer2" />
+  <UMembership_AnyObject    left="umem-printer2" right="95789f9f-85a6-42d5-af9a-a740b1b1d83d"/>
+  <UMembership_SyncopeGroup left="umem-printer2" right="acc-printers-group-id" />
+
+  <AnyObject id="f3a21d72-f7fe-4baa-8067-b96e2aa690e9"
+             name="printer 3"
+             type="PRINTER"
+             plainAttrs.model='{"values":[{"stringValue":"HP Color LaserJet Pro"}]}'
+             plainAttrs.location='{"values":[{"stringValue":"Corner"}]}'/>
+  <!-- (printer 3) <-> /scranton/accounting -->
+  <AnyObject_Realm left="f3a21d72-f7fe-4baa-8067-b96e2aa690e9"
+                          right="9217ab67-3634-4304-b8af-75edc270b109" />
+  <UMembership              id="umem-printer3" />
+  <UMembership_AnyObject    left="umem-printer3" right="f3a21d72-f7fe-4baa-8067-b96e2aa690e9"/>
+  <UMembership_SyncopeGroup left="umem-printer3" right="acc-printers-group-id" />
+
+  <AnyObject id="690f5d74-4294-4871-8864-a261693b7ef4"
+             name="printer 4"
+             type="PRINTER"
+             plainAttrs.model='{"values":[{"stringValue":"HP Color LaserJet Pro"}]}'
+             plainAttrs.location='{"values":[{"stringValue":"Window"}]}'/>
+
+  <!-- (printer 4) <-> /scranton/sales -->
+  <AnyObject_Realm left="690f5d74-4294-4871-8864-a261693b7ef4"
+                   right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <UMembership              id="umem-printer4" />
+  <UMembership_AnyObject    left="umem-printer4" right="690f5d74-4294-4871-8864-a261693b7ef4"/>
+  <UMembership_SyncopeGroup left="umem-printer4" right="sales-printers-group-id" />
+
+  <AnyObject id="3a523427-9be4-4ddd-8725-8e1efd4c23a2"
+             name="printer 5"
+             type="PRINTER"
+             plainAttrs.model='{"values":[{"stringValue":"HP Color LaserJet Pro"}]}'
+             plainAttrs.location='{"values":[{"stringValue":"Window"}]}'/>
+
+  <!-- (printer 5) <-> /scranton/sales -->
+  <AnyObject_Realm left="3a523427-9be4-4ddd-8725-8e1efd4c23a2"
+                   right="ac936eff-876a-43f2-9785-f479dac94f3a" />
+  <UMembership              id="umem-printer5" />
+  <UMembership_AnyObject    left="umem-printer5" right="3a523427-9be4-4ddd-8725-8e1efd4c23a2"/>
+  <UMembership_SyncopeGroup left="umem-printer5" right="sales-printers-group-id" />
+
+  <!-- "print_access" relationship -->
+  <!-- (Kevin Malone> <- (can use) -> (printer 2) -->
+  <URelationship id="7551ce87-86e1-4348-a190-f158be0089c6" />
+  <URelationship_RelationshipType left="7551ce87-86e1-4348-a190-f158be0089c6"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="7551ce87-86e1-4348-a190-f158be0089c6"
+                                  right="441c61fe-e461-4ab3-b276-575e91f550bc" />
+  <URelationship_AnyObject        left="7551ce87-86e1-4348-a190-f158be0089c6"
+                                  right="95789f9f-85a6-42d5-af9a-a740b1b1d83d" />
+
+  <!-- (Kevin Malone> <- (can use) -> (printer 3) -->
+  <URelationship id="5ae8d60c-23e5-4f5e-a45f-eac762d5f84b" />
+  <URelationship_RelationshipType left="5ae8d60c-23e5-4f5e-a45f-eac762d5f84b"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="5ae8d60c-23e5-4f5e-a45f-eac762d5f84b"
+                                  right="441c61fe-e461-4ab3-b276-575e91f550bc" />
+  <URelationship_AnyObject        left="5ae8d60c-23e5-4f5e-a45f-eac762d5f84b"
+                                  right="f3a21d72-f7fe-4baa-8067-b96e2aa690e9" />
+
+  <!-- (Angela Martin> <- (can use) -> (printer 2) -->
+  <URelationship id="d682667e-b52d-4c4d-8d05-8a042c71b35e" />
+  <URelationship_RelationshipType left="d682667e-b52d-4c4d-8d05-8a042c71b35e"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="d682667e-b52d-4c4d-8d05-8a042c71b35e"
+                                  right="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4" />
+  <URelationship_AnyObject        left="d682667e-b52d-4c4d-8d05-8a042c71b35e"
+                                  right="95789f9f-85a6-42d5-af9a-a740b1b1d83d" />
+
+  <!-- (Angela Martin> <- (can use) -> (printer 3) -->
+  <URelationship id="4ed09da7-08f9-483e-9ff3-c414d5da5074" />
+  <URelationship_RelationshipType left="4ed09da7-08f9-483e-9ff3-c414d5da5074"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="4ed09da7-08f9-483e-9ff3-c414d5da5074"
+                                  right="21c5d3fe-6ab6-4dc6-8aa2-b385469c49b4" />
+  <URelationship_AnyObject        left="4ed09da7-08f9-483e-9ff3-c414d5da5074"
+                                  right="f3a21d72-f7fe-4baa-8067-b96e2aa690e9" />
+
+  <!-- (Pam Beesly> <- (can use) -> (printer 1) -->
+  <URelationship id="db9a7215-7e25-4e77-82ce-5c9ddbc967df" />
+  <URelationship_RelationshipType left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="051708f2-aed2-462a-bb7b-ca3987a8eb94" />
+  <URelationship_AnyObject        left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+
+  <!-- (Pam Beesly> <- (can use) -> (printer 4) -->
+  <URelationship id="d783edf6-59a6-42bf-af01-b880324d96b7" />
+  <URelationship_RelationshipType left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="051708f2-aed2-462a-bb7b-ca3987a8eb94" />
+  <URelationship_AnyObject        left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="690f5d74-4294-4871-8864-a261693b7ef4" />
+
+  <!-- (Pam Beesly> <- (can use) -> (printer 5) -->
+  <URelationship id="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4" />
+  <URelationship_RelationshipType left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="051708f2-aed2-462a-bb7b-ca3987a8eb94" />
+  <URelationship_AnyObject        left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+
+  <!-- (Jim Halpert> <- (can use) -> (printer 1) -->
+  <URelationship id="db9a7215-7e25-4e77-82ce-5c9ddbc967df" />
+  <URelationship_RelationshipType left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf" />
+  <URelationship_AnyObject        left="db9a7215-7e25-4e77-82ce-5c9ddbc967df"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+
+  <!-- (Jim Halpert> <- (can use) -> (printer 4) -->
+  <URelationship id="d783edf6-59a6-42bf-af01-b880324d96b7" />
+  <URelationship_RelationshipType left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf" />
+  <URelationship_AnyObject        left="d783edf6-59a6-42bf-af01-b880324d96b7"
+                                  right="690f5d74-4294-4871-8864-a261693b7ef4" />
+
+  <!-- (Jim Halpert> <- (can use) -> (printer 5) -->
+  <URelationship id="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4" />
+  <URelationship_RelationshipType left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="f8ee4db2-c3b5-4bd3-9b5e-a7ae993b6cdf" />
+  <URelationship_AnyObject        left="367ebc7f-dcff-4f4e-ba7e-3e8b2c8a4df4"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+  <!-- (Dwight Schrute> <- (can use) -> (printer 1) -->
+  <URelationship id="c6fcf7c6-d7ea-434b-a2cd-1a8faa40717a" />
+  <URelationship_RelationshipType left="c6fcf7c6-d7ea-434b-a2cd-1a8faa40717a"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="c6fcf7c6-d7ea-434b-a2cd-1a8faa40717a"
+                                  right="5f2a078b-7b01-40e3-a847-625681bf9365" />
+  <URelationship_AnyObject        left="c6fcf7c6-d7ea-434b-a2cd-1a8faa40717a"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+
+  <!-- (Dwight Schrute> <- (can use) -> (printer 4) -->
+  <URelationship id="0a961728-9de2-4d16-adee-b4c7e644d8ce" />
+  <URelationship_RelationshipType left="0a961728-9de2-4d16-adee-b4c7e644d8ce"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="0a961728-9de2-4d16-adee-b4c7e644d8ce"
+                                  right="5f2a078b-7b01-40e3-a847-625681bf9365" />
+  <URelationship_AnyObject        left="0a961728-9de2-4d16-adee-b4c7e644d8ce"
+                                  right="690f5d74-4294-4871-8864-a261693b7ef4" />
+
+  <!-- (Dwight Schrute> <- (can use) -> (printer 5) -->
+  <URelationship id="9394a6bf-6206-4d75-8162-a6f76a4064fd" />
+  <URelationship_RelationshipType left="9394a6bf-6206-4d75-8162-a6f76a4064fd"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="9394a6bf-6206-4d75-8162-a6f76a4064fd"
+                                  right="5f2a078b-7b01-40e3-a847-625681bf9365" />
+  <URelationship_AnyObject        left="9394a6bf-6206-4d75-8162-a6f76a4064fd"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+  <!-- (Michael Scott) <- (can use) -> (printer 1) -->
+  <URelationship id="ec978571-cf74-4510-85bf-72fdf39b0ca4" />
+  <URelationship_RelationshipType left="ec978571-cf74-4510-85bf-72fdf39b0ca4"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="ec978571-cf74-4510-85bf-72fdf39b0ca4"
+                                  right="28a2245f-8e75-4c5b-8416-19bd44c316a8" />
+  <URelationship_AnyObject        left="ec978571-cf74-4510-85bf-72fdf39b0ca4"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+
+  <!-- (Micheal Scott) <- (can use) -> (printer 2) -->
+  <URelationship id="a10d9661-afa1-4cf0-bf08-0ade70837c2c" />
+  <URelationship_RelationshipType left="a10d9661-afa1-4cf0-bf08-0ade70837c2c"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="a10d9661-afa1-4cf0-bf08-0ade70837c2c"
+                                  right="28a2245f-8e75-4c5b-8416-19bd44c316a8" />
+  <URelationship_AnyObject        left="a10d9661-afa1-4cf0-bf08-0ade70837c2c"
+                                  right="95789f9f-85a6-42d5-af9a-a740b1b1d83d" />
+
+  <!-- (Michael Scott) <- (can use) -> (printer 3) -->
+  <URelationship id="744b6e2d-3258-4f0f-9c44-828aeb3f3c7f" />
+  <URelationship_RelationshipType left="744b6e2d-3258-4f0f-9c44-828aeb3f3c7f"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="744b6e2d-3258-4f0f-9c44-828aeb3f3c7f"
+                                  right="28a2245f-8e75-4c5b-8416-19bd44c316a8" />
+  <URelationship_AnyObject        left="744b6e2d-3258-4f0f-9c44-828aeb3f3c7f"
+                                  right="f3a21d72-f7fe-4baa-8067-b96e2aa690e9" />
+
+  <!-- (Micheal Scott) <- (can use) -> (printer 4) -->
+  <URelationship id="62315fdd-91f9-4e88-b475-6f26389fdc95" />
+  <URelationship_RelationshipType left="62315fdd-91f9-4e88-b475-6f26389fdc95"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="62315fdd-91f9-4e88-b475-6f26389fdc95"
+                                  right="28a2245f-8e75-4c5b-8416-19bd44c316a8" />
+  <URelationship_AnyObject        left="62315fdd-91f9-4e88-b475-6f26389fdc95"
+                                  right="690f5d74-4294-4871-8864-a261693b7ef4" />
+
+  <!-- (Michael Scott) <- (can use) -> (printer 5) -->
+  <URelationship id="38d041c3-081a-452d-97d3-f319aba33efe" />
+  <URelationship_RelationshipType left="38d041c3-081a-452d-97d3-f319aba33efe"
+                                  right="print_access" />
+  <URelationship_SyncopeUser      left="38d041c3-081a-452d-97d3-f319aba33efe"
+                                  right="28a2245f-8e75-4c5b-8416-19bd44c316a8" />
+  <URelationship_AnyObject        left="38d041c3-081a-452d-97d3-f319aba33efe"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+  <!-- "proximity" relationships -->
+  <!-- printer 2 and printer 3 are both in the corner -->
+  <ARelationship                  id="66675e75-47fe-4ee1-853a-633d753644df" />
+  <ARelationship_RelationshipType left="66675e75-47fe-4ee1-853a-633d753644df"
+                                  right="proximity" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_SOURCE"
+                                  left="66675e75-47fe-4ee1-853a-633d753644df"
+                                  right="95789f9f-85a6-42d5-af9a-a740b1b1d83d" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_DEST"
+                                  left="66675e75-47fe-4ee1-853a-633d753644df"
+                                  right="f3a21d72-f7fe-4baa-8067-b96e2aa690e9" />
+
+  <!-- printer 1 and printer 4 are both near the window -->
+  <ARelationship id="c971dc2a-176d-46eb-b6b2-165fd88aeb1f" />
+  <ARelationship_RelationshipType left="836752eb-6cf3-4a89-9968-2345fda38ad1"
+                                  right="proximity" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_SOURCE"
+                                  left="c971dc2a-176d-46eb-b6b2-165fd88aeb1f"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_DEST"
+                                  left="c971dc2a-176d-46eb-b6b2-165fd88aeb1f"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+  <!-- printer 1 and printer 5 are both near the window -->
+  <ARelationship id="5dd59961-1b78-4a9f-bf99-307c20a00650" />
+  <ARelationship_RelationshipType left="836752eb-6cf3-4a89-9968-2345fda38ad1"
+                                  right="proximity" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_SOURCE"
+                                  left="5dd59961-1b78-4a9f-bf99-307c20a00650"
+                                  right="3a207e78-9e67-4e01-9a74-cdfb86a3d601" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_DEST"
+                                  left="5dd59961-1b78-4a9f-bf99-307c20a00650"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+
+  <!-- printer 4 and printer 5 are both near the window -->
+  <ARelationship id="836752eb-6cf3-4a89-9968-2345fda38ad1" />
+  <ARelationship_RelationshipType left="836752eb-6cf3-4a89-9968-2345fda38ad1"
+                                  right="proximity" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_SOURCE"
+                                  left="836752eb-6cf3-4a89-9968-2345fda38ad1"
+                                  right="690f5d74-4294-4871-8864-a261693b7ef4" />
+  <ARelationship_AnyObject        type="ARELATIONSHIP_DEST"
+                                  left="836752eb-6cf3-4a89-9968-2345fda38ad1"
+                                  right="3a523427-9be4-4ddd-8725-8e1efd4c23a2" />
+</dataset>
