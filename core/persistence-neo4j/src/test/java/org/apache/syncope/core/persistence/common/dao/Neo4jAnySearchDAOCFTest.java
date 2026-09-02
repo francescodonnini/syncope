@@ -46,12 +46,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
-@SpringJUnitConfig(Configuration.class)
-@DirtiesContext
-public class Neo4jAnySearchDAOTestCF extends AbstractNeo4jAnySearchDAOTest {
+public class Neo4jAnySearchDAOCFTest extends AbstractNeo4jAnySearchDAOTest {
     private static final boolean SKIP_TEST = true;
     private static boolean INIT_DYN_REALMS = false;
 

@@ -222,8 +222,7 @@ under the License.
             <artifactId>maven-failsafe-plugin</artifactId>
             <configuration>
               <includes>
-                <include>**/Neo4jAnySearchDAOTestBB.java</include>
-                <include>**/Neo4jAnySearchDAOTestCF.java</include>
+                <include>**/Neo4jAnySearchDAO*Test.java</include>
               </includes>
               <systemPropertyVariables>
                 <NEO4J_CONTAINER_IP>${docker.container.neo4j.ip}</NEO4J_CONTAINER_IP>

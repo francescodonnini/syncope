@@ -46,7 +46,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
-public class Neo4jAnySearchDAOTestBB extends AbstractNeo4jAnySearchDAOTest {
+public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
     private static final boolean SKIP_TEST = true;
 
     static Stream<Arguments> inputs() {
