@@ -36,7 +36,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class BatchPayloadParserTest {
+public class BatchPayloadParserBBTest {
     private static final boolean SKIP_TEST = true;
     private static final BatchPayloadBuilder PART_00 = BatchPayloadBuilder.builder()
             .boundary("b")
@@ -249,6 +249,7 @@ public class BatchPayloadParserTest {
             .endPart()
             .closingDelimiter();
 
+    // 1-18
     private static Stream<Arguments> inputs() {
         return Stream.of(
                 Arguments.of(PART_00, Optional.empty(), Optional.of(IllegalArgumentException.class)),
@@ -1027,40 +1028,5 @@ public class BatchPayloadParserTest {
     private void assertEquals(final BatchItem expected, final BatchItem actual) {
         Assertions.assertEquals(expected.getHeaders(), actual.getHeaders());
         Assertions.assertEquals(expected.getContent(), actual.getContent());
-    }
-
-    @Test
-    public void testMissingCR() throws IOException {
-        byte[] data = ("--bnd\r\n"
-                + "some\n"
-                + "    data\n"
-                + "--bnd\n   "
-                + " a bdiod\r\n"
-                + "--bnd--").getBytes();
-        List<BatchRequestItem> batches = BatchPayloadParser.parse(
-                new ByteArrayInputStream(data),
-                mediaType("bnd"),
-                new BatchRequestItem());
-        Assertions.assertEquals(2, batches.size());
-    }
-
-    @Test
-    public void testRequestResponseMismatch() throws IOException {
-        String boundary = "padded_boundary";
-        byte[] payload = BatchPayloadBuilder.builder().boundary(boundary)
-                .delimiter(5)
-                .line()
-                .line("Content-Type: application/http")
-                .line("Content-Transfer-Encoding: binary")
-                .line()
-                .line("POST /users HTTP/1.1")
-                .line("Accept: application/json")
-                .closingDelimiter(10)
-                .create();
-        List<BatchResponseItem> items = BatchPayloadParser.parse(
-                new ByteArrayInputStream(payload),
-                mediaType(boundary),
-                new BatchResponseItem());
-        Assertions.assertEquals(1, items.size());
     }
 }

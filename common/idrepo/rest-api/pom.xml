@@ -160,7 +160,8 @@ under the License.
                 <targetClass>org.apache.syncope.common.rest.api.batch.*</targetClass>
               </targetClasses>
               <targetTests>
-                <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserTest</targetTest>
+                <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserBBTest</targetTest>
+                <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserCFTest</targetTest>
                 <targetTest>org.apache.syncope.common.rest.api.batch.BatchPayloadParserGeminiTest</targetTest>
                 <targetTest>RegressionTest*</targetTest>
               </targetTests>
