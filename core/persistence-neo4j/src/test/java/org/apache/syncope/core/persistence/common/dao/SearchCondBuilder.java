@@ -41,6 +41,13 @@ public final class SearchCondBuilder {
         return SearchCond.of(cond);
     }
 
+    public static SearchCond attr(final String schema, final AttrCond.Type type) {
+        AttrCond cond = new AttrCond();
+        cond.setSchema(schema);
+        cond.setType(type);
+        return SearchCond.of(cond);
+    }
+
     public static SearchCond attr(final String schema, final AttrCond.Type type, final String expression) {
         AttrCond cond = new AttrCond();
         cond.setSchema(schema);
@@ -65,6 +72,12 @@ public final class SearchCondBuilder {
 
     public static SearchCond attrIsNull(final String schema) {
         AttrCond cond = new AttrCond(AttrCond.Type.ISNULL);
+        cond.setSchema(schema);
+        return SearchCond.of(cond);
+    }
+
+    public static SearchCond attrNotNull(final String schema) {
+        AttrCond cond = new AttrCond(AttrCond.Type.ISNOTNULL);
         cond.setSchema(schema);
         return SearchCond.of(cond);
     }
@@ -114,6 +127,21 @@ public final class SearchCondBuilder {
     public static SearchCond role(final String roleKey) {
         RoleCond cond = new RoleCond();
         cond.setRole(roleKey);
+        return SearchCond.of(cond);
+    }
+
+    public static SearchCond any(final String schema, final AttrCond.Type type, final String expression) {
+        AnyCond cond = new AnyCond();
+        cond.setType(type);
+        cond.setSchema(schema);
+        cond.setExpression(expression);
+        return SearchCond.of(cond);
+    }
+
+    public static SearchCond any(final String schema, final AttrCond.Type type) {
+        AnyCond cond = new AnyCond();
+        cond.setType(type);
+        cond.setSchema(schema);
         return SearchCond.of(cond);
     }
 
