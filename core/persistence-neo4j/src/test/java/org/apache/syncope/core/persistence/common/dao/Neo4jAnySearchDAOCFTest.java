@@ -220,13 +220,13 @@ public class Neo4jAnySearchDAOCFTest extends AbstractNeo4jAnySearchDAOTest {
                         "/kanto/league/gyms/cerulean",
                         false,
                         Set.of("/kanto/league/gyms/cerulean"),
-                        SearchCondBuilder.not(SearchCondBuilder.any("email", AttrCond.Type.ISNOTNULL)),
+                        SearchCondBuilder.not(SearchCondBuilder.attr("email", AttrCond.Type.ISNOTNULL)),
                         Pageable.unpaged(),
                         AnyTypeKind.GROUP,
                         List.of("Sailors", "Swimmers", "Women"),
                         false,
                         3,
-                        SKIP_TEST
+                        false
                 ),
                 Arguments.of(
                         "/kanto/league/gyms/cerulean",

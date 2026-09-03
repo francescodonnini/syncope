@@ -24,7 +24,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest.
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 21
@@ -37,12 +37,24 @@ jobs:
       - name: Build with Maven
         run: mvn clean install -DskipTests -pl :syncope-core-spring,:syncope-common-idrepo-rest-api,:syncope-core-persistence-neo4j -am
 
-      - name: Generate, Test, Coverage, and Mutate
+      - name: Generate, Test, Coverage, and Mutate for BatchPayloadParser
         run: >
           mvn test jacoco:report org.pitest:pitest-maven:mutationCoverage 
           -Pjacoco,pit,randoop 
           -pl :syncope-common-idrepo-rest-api
           -Dcheckstyle.skip=true
+
+      - name: Generate Test and Coverage for Neo4jAnySearchDAO
+        run: >
+          mvn verify -Dmaven.build.cache.enabled=false -DredirectTestOutputToFile=false
+
+      - name: Mutate for Neo4jAnySearchDAO
+        run: >
+          mvn process-test-classes docker:start org.pitest:pitest-maven:mutationCoverage docker:stop 
+          -Pneo4j-fra
+          -pl :syncope-core-persistence-neo4j
+          -Dmaven.build.cache.enabled=false -Djacoco.skip=true -DargLine="" -Dspring.neo4j.uri=bolt://localhost:7687
+  
 
       - name: Upload JaCoCo and PIT reports
         uses: actions/upload-artifact@v4
@@ -52,6 +64,8 @@ jobs:
           path: |
             common/idrepo/rest-api/target/site/jacoco
             common/idrepo/rest-api/target/pit-reports
+            core/persistence-neo4j/target/site/jacoco
+            core/persistence-neo4j/target/pit-reports
 
       - name: Upload Auto-generated Tests
         uses: actions/upload-artifact@v4
