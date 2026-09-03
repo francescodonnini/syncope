@@ -35,13 +35,13 @@ jobs:
           cache: maven
 
       - name: Build with Maven
-        run: mvn clean install -DskipTests -pl :syncope-core-spring,:syncope-common-idrepo-rest-api -am
+        run: mvn clean install -DskipTests -pl :syncope-core-spring,:syncope-common-idrepo-rest-api,:syncope-core-persistence-neo4j -am
 
       - name: Generate, Test, Coverage, and Mutate
         run: >
           mvn test jacoco:report org.pitest:pitest-maven:mutationCoverage 
           -Pjacoco,pit,randoop 
-          -pl :syncope-core-spring,:syncope-common-idrepo-rest-api
+          -pl :syncope-common-idrepo-rest-api
           -Dcheckstyle.skip=true
 
       - name: Upload JaCoCo and PIT reports
@@ -52,8 +52,6 @@ jobs:
           path: |
             common/idrepo/rest-api/target/site/jacoco
             common/idrepo/rest-api/target/pit-reports
-            core/spring/target/site/jacoco
-            core/spring/target/pit-reports
 
       - name: Upload Auto-generated Tests
         uses: actions/upload-artifact@v4
