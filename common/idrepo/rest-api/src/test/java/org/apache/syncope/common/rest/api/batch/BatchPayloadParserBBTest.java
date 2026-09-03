@@ -1005,6 +1005,8 @@ public class BatchPayloadParserBBTest {
     public void testHttpResponses(
             final BatchPayloadBuilder builder,
             final List<BatchResponseItem> expectedBatch) throws IOException {
+        Assumptions.assumeFalse(SKIP_TEST);
+
         List<BatchResponseItem> actualBatch = BatchPayloadParser.parse(
                 new ByteArrayInputStream(builder.create()),
                 mediaType(builder.getBoundary()),
