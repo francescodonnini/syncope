@@ -18,6 +18,7 @@
  */
 package org.apache.syncope.core.persistence.common.dao;
 
+import static org.apache.syncope.core.persistence.common.dao.SkipTest.SKIP_TEST;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -47,8 +48,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
-    private static final boolean SKIP_TEST = true;
-
     static Stream<Arguments> inputs() {
         return Stream.of(
                 // [0] Il DAO lancia un'eccezione dovuto un errore nella generazione della query e non credo sia

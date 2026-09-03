@@ -18,6 +18,8 @@
  */
 package org.apache.syncope.core.persistence.common.dao;
 
+import static org.apache.syncope.core.persistence.common.dao.SkipTest.SKIP_TEST;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,7 +50,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 public class Neo4jAnySearchDAOCFTest extends AbstractNeo4jAnySearchDAOTest {
-    private static final boolean SKIP_TEST = true;
     private static boolean INIT_DYN_REALMS = false;
 
     @BeforeEach
