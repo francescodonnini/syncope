@@ -18,12 +18,11 @@
  */
 package org.apache.syncope.core.persistence.jpa.entity.user;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.persistence.Cacheable;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
@@ -34,7 +33,6 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -44,8 +42,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.types.CipherAlgorithm;
+import org.apache.syncope.common.lib.types.Mfa;
 import org.apache.syncope.core.persistence.api.ApplicationContextProvider;
+import org.apache.syncope.core.persistence.api.Encryptor;
 import org.apache.syncope.core.persistence.api.EncryptorManager;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
 import org.apache.syncope.core.persistence.api.entity.AnyType;
@@ -59,6 +60,8 @@ import org.apache.syncope.core.persistence.api.entity.user.SecurityQuestion;
 import org.apache.syncope.core.persistence.api.entity.user.UMembership;
 import org.apache.syncope.core.persistence.api.entity.user.URelationship;
 import org.apache.syncope.core.persistence.api.entity.user.User;
+import org.apache.syncope.core.persistence.jpa.converters.PlainAttrListConverter;
+import org.apache.syncope.core.persistence.jpa.converters.StringListConverter;
 import org.apache.syncope.core.persistence.jpa.entity.AbstractGroupableRelatable;
 import org.apache.syncope.core.persistence.jpa.entity.JPAAnyTypeClass;
 import org.apache.syncope.core.persistence.jpa.entity.JPAExternalResource;
@@ -69,7 +72,6 @@ import org.apache.syncope.core.spring.security.SecureRandomUtils;
 
 @Entity
 @Table(name = JPAUser.TABLE)
-@EntityListeners({ JSONUserListener.class })
 @Cacheable
 public class JPAUser
         extends AbstractGroupableRelatable<User, UMembership, URelationship>
@@ -78,9 +80,6 @@ public class JPAUser
     private static final long serialVersionUID = -3905046855521446823L;
 
     public static final String TABLE = "SyncopeUser";
-
-    protected static final TypeReference<List<String>> TYPEREF = new TypeReference<List<String>>() {
-    };
 
     @Column(nullable = true)
     protected String password;
@@ -94,10 +93,8 @@ public class JPAUser
             @UniqueConstraint(columnNames = { "user_id", "role_id" }))
     protected List<JPARole> roles = new ArrayList<>();
 
-    private String plainAttrs;
-
-    @Transient
-    private final List<PlainAttr> plainAttrsList = new ArrayList<>();
+    @Convert(converter = PlainAttrListConverter.class)
+    private List<PlainAttr> plainAttrs = new ArrayList<>();
 
     @Lob
     protected String token;
@@ -108,8 +105,9 @@ public class JPAUser
     @Enumerated(EnumType.STRING)
     protected CipherAlgorithm cipherAlgorithm;
 
+    @Convert(converter = StringListConverter.class)
     @Lob
-    protected String passwordHistory;
+    protected List<String> passwordHistory = new ArrayList<>();
 
     /**
      * Subsequent failed logins.
@@ -141,7 +139,7 @@ public class JPAUser
     /**
      * Provisioning external resources.
      */
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(joinColumns =
             @JoinColumn(name = "user_id"),
             inverseJoinColumns =
@@ -173,9 +171,16 @@ public class JPAUser
     @Column(nullable = true)
     protected String securityAnswer;
 
+    @Lob
+    protected String mfa;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy = "owner")
     @Valid
     protected List<JPALinkedAccount> linkedAccounts = new ArrayList<>();
+
+    protected Encryptor encryptor() {
+        return ApplicationContextProvider.getApplicationContext().getBean(EncryptorManager.class).getInstance();
+    }
 
     @Override
     public AnyType getType() {
@@ -222,13 +227,13 @@ public class JPAUser
     }
 
     protected String encode(final String value) throws Exception {
-        return ApplicationContextProvider.getApplicationContext().getBean(EncryptorManager.class).getInstance().encode(
+        return encryptor().encode(
                 value,
                 Optional.ofNullable(cipherAlgorithm).
                         orElseGet(() -> CipherAlgorithm.valueOf(
                         ApplicationContextProvider.getBeanFactory().getBean(ConfParamOps.class).get(
                                 AuthContextUtils.getDomain(),
-                                "password.cipher.algorithm",
+                                StandardConfParams.PASSWORD_CIPHER_ALGORITHM,
                                 CipherAlgorithm.AES.name(),
                                 String.class))));
     }
@@ -264,28 +269,25 @@ public class JPAUser
     }
 
     @Override
-    public List<PlainAttr> getPlainAttrsList() {
-        return plainAttrsList;
-    }
-
-    @Override
-    public String getPlainAttrsJSON() {
+    protected List<PlainAttr> plainAttrs() {
         return plainAttrs;
     }
 
     @Override
-    public void setPlainAttrsJSON(final String plainAttrs) {
-        this.plainAttrs = plainAttrs;
+    public List<PlainAttr> getPlainAttrs() {
+        return plainAttrs.stream().
+                filter(attr -> attr.getMembership() == null && attr.getRelationship() == null).
+                toList();
     }
 
     @Override
     public boolean add(final PlainAttr attr) {
-        return plainAttrsList.add(attr);
+        return plainAttrs.add(attr);
     }
 
     @Override
     public boolean remove(final PlainAttr attr) {
-        return plainAttrsList.removeIf(a -> a.getSchema().equals(attr.getSchema())
+        return plainAttrs.removeIf(a -> a.getSchema().equals(attr.getSchema())
                 && Objects.equals(a.getMembership(), attr.getMembership())
                 && Objects.equals(a.getRelationship(), attr.getRelationship()));
     }
@@ -328,22 +330,18 @@ public class JPAUser
 
     @Override
     public void addToPasswordHistory(final String password) {
-        List<String> ph = getPasswordHistory();
-        ph.add(password);
-        passwordHistory = POJOHelper.serialize(ph);
+        passwordHistory.add(password);
     }
 
     @Override
     public void removeOldestEntriesFromPasswordHistory(final int n) {
-        List<String> ph = getPasswordHistory();
-        passwordHistory = POJOHelper.serialize(ph.subList(Math.min(n, ph.size()), ph.size()));
+        passwordHistory = new ArrayList<>(
+                passwordHistory.subList(Math.min(n, passwordHistory.size()), passwordHistory.size()));
     }
 
     @Override
     public List<String> getPasswordHistory() {
-        return passwordHistory == null
-                ? new ArrayList<>(0)
-                : POJOHelper.deserialize(passwordHistory, TYPEREF);
+        return passwordHistory;
     }
 
     @Override
@@ -438,6 +436,33 @@ public class JPAUser
     }
 
     @Override
+    public Mfa getMfa() {
+        if (mfa == null) {
+            return null;
+        }
+
+        try {
+            return POJOHelper.deserialize(encryptor().decode(mfa, CipherAlgorithm.AES), Mfa.class);
+        } catch (Exception e) {
+            LOG.error("Could not read Mfa", e);
+            return null;
+        }
+    }
+
+    @Override
+    public void setMfa(final Mfa mfa) {
+        if (mfa == null) {
+            this.mfa = null;
+        } else {
+            try {
+                this.mfa = encryptor().encode(POJOHelper.serialize(mfa), CipherAlgorithm.AES);
+            } catch (Exception e) {
+                LOG.error("Could not save Mfa", e);
+            }
+        }
+    }
+
+    @Override
     public boolean add(final AnyTypeClass auxClass) {
         checkType(auxClass, JPAAnyTypeClass.class);
         return auxClasses.contains((JPAAnyTypeClass) auxClass) || auxClasses.add((JPAAnyTypeClass) auxClass);
@@ -457,7 +482,7 @@ public class JPAUser
     @Override
     public boolean remove(final Relationship<?, ?> relationship) {
         checkType(relationship, JPAURelationship.class);
-        plainAttrsList.removeIf(attr -> Objects.equals(attr.getRelationship(), relationship.getKey()));
+        plainAttrs.removeIf(attr -> Objects.equals(attr.getRelationship(), relationship.getKey()));
         return relationships.remove((JPAURelationship) relationship);
     }
 
@@ -475,7 +500,7 @@ public class JPAUser
     @Override
     public boolean remove(final UMembership membership) {
         checkType(membership, JPAUMembership.class);
-        plainAttrsList.removeIf(attr -> Objects.equals(attr.getMembership(), membership.getKey()));
+        plainAttrs.removeIf(attr -> Objects.equals(attr.getMembership(), membership.getKey()));
         return memberships.remove((JPAUMembership) membership);
     }
 

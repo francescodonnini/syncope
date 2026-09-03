@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -47,6 +48,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.client.lib.batch.BatchRequest;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.Attr;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
@@ -496,11 +498,10 @@ public class UserITCase extends AbstractITCase {
     @Test
     public void read() {
         UserTO userTO = USER_SERVICE.read("1417acbe-cbf6-4277-9372-e75e04f97000");
-
         assertNotNull(userTO);
-        assertNull(userTO.getPassword());
         assertNotNull(userTO.getPlainAttrs());
         assertFalse(userTO.getPlainAttrs().isEmpty());
+        assertNotNull(getPassword(userTO.getKey()));
     }
 
     @Test
@@ -729,42 +730,42 @@ public class UserITCase extends AbstractITCase {
         assumeTrue(IS_FLOWABLE_ENABLED);
 
         UserCR userCR = getUniqueSample("createActivate@syncope.apache.org");
-
         userCR.getMemberships().add(new MembershipTO.Builder("268fed79-f440-4390-9435-b273768eb5d6").build());
 
         UserTO userTO = createUser(userCR).getEntity();
-
         assertNotNull(userTO);
-        assertNotNull(userTO.getToken());
-        assertNotNull(userTO.getTokenExpireTime());
-
         assertEquals("created", userTO.getStatus());
 
-        StatusR statusR = new StatusR.Builder(userTO.getKey(), StatusRType.ACTIVATE).token(userTO.getToken()).build();
+        Map<String, Object> map = getToken(userTO.getKey());
+        assertNotNull(map.get("token"));
+        assertNotNull(map.get("tokenExpireTime"));
+
+        StatusR statusR = new StatusR.Builder(userTO.getKey(), StatusRType.ACTIVATE).
+                token(map.get("token").toString()).build();
 
         userTO = USER_SERVICE.status(statusR).readEntity(new GenericType<ProvisioningResult<UserTO>>() {
         }).getEntity();
-
         assertNotNull(userTO);
-        assertNull(userTO.getToken());
-        assertNull(userTO.getTokenExpireTime());
         assertEquals("active", userTO.getStatus());
+
+        map = getToken(userTO.getKey());
+        assertNull(map.get("token"));
+        assertNull(map.get("tokenExpireTime"));
     }
 
     @Test
     public void suspendReactivate() {
         UserCR userCR = getUniqueSample("suspendReactivate@syncope.apache.org");
-
         userCR.getMemberships().add(new MembershipTO.Builder("bf825fe1-7320-4a54-bd64-143b5c18ab97").build());
 
         UserTO userTO = createUser(userCR).getEntity();
-
         assertNotNull(userTO);
         assertEquals(IS_FLOWABLE_ENABLED
                 ? "active"
                 : "created", userTO.getStatus());
 
-        StatusR statusR = new StatusR.Builder(userTO.getKey(), StatusRType.SUSPEND).token(userTO.getToken()).build();
+        String token = Optional.ofNullable(getToken(userTO.getKey()).get("token")).map(Object::toString).orElse(null);
+        StatusR statusR = new StatusR.Builder(userTO.getKey(), StatusRType.SUSPEND).token(token).build();
 
         userTO = USER_SERVICE.status(statusR).readEntity(new GenericType<ProvisioningResult<UserTO>>() {
         }).getEntity();
@@ -959,7 +960,7 @@ public class UserITCase extends AbstractITCase {
         passwordPolicy = createPolicy(PolicyType.PASSWORD, passwordPolicy);
         assertNotNull(passwordPolicy);
 
-        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().keyword("two").build()).getResult().getFirst();
+        RealmTO realm = REALM_SERVICE.search(new RealmQuery.Builder().fiql("name==two").build()).getResult().getFirst();
         String oldAccountPolicy = realm.getAccountPolicy();
         realm.setAccountPolicy(accountPolicy.getKey());
         String oldPasswordPolicy = realm.getPasswordPolicy();
@@ -1395,9 +1396,9 @@ public class UserITCase extends AbstractITCase {
     }
 
     @Test
-    public void verifySecurityAnswer() throws Exception {
+    public void verifySecurityAnswer() {
         // 0. ensure that password request DOES require security question
-        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, "passwordReset.securityQuestion", true);
+        confParamOps.set(SyncopeConstants.MASTER_DOMAIN, StandardConfParams.PASSWORD_RESET_SECURITY_QUESTION, true);
 
         // 1. create an user with security question and answer
         UserCR user = UserITCase.getUniqueSample("pwdReset@syncope.apache.org");

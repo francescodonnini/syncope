@@ -19,7 +19,7 @@
 package org.apache.syncope.client.console.commons;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.syncope.client.console.SyncopeConsoleSession;
@@ -66,7 +66,7 @@ public class IdRepoImplementationInfoProvider implements ImplementationInfoProvi
         List<String> classes = List.of();
         if (viewMode == ViewMode.JAVA_CLASS) {
             classes = SyncopeConsoleSession.get().getPlatformInfo().getJavaImplInfo(implementation.getType()).
-                    map(javaImplInfo -> new ArrayList<>(javaImplInfo.getClasses())).orElseGet(ArrayList::new);
+                    map(javaImplInfo -> new ArrayList<>(javaImplInfo.classes())).orElseGet(ArrayList::new);
         } else if (viewMode == ViewMode.JSON_BODY) {
             switch (implementation.getType()) {
                 case IdRepoImplementationType.REPORT_DELEGATE:
@@ -88,7 +88,7 @@ public class IdRepoImplementationInfoProvider implements ImplementationInfoProvi
             }
         }
         if (!classes.isEmpty()) {
-            Collections.sort(classes);
+            classes.sort(Comparator.naturalOrder());
         }
 
         return classes;

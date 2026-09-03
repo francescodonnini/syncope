@@ -75,10 +75,8 @@ public abstract class ChangePasswordPanel extends Panel {
                 String cssClass = getString(CssUtils.key(Form.class, "hidden-fields"));
 
                 // div that is not visible (but not display:none either)
-                buffer.append(String.format(
-                        "<div style=\"width:0px;height:0px;position:absolute;"
-                        + "left:-100px;top:-100px;overflow:hidden\" class=\"%s\">",
-                        cssClass));
+                buffer.append("<div style=\"width:0px;height:0px;position:absolute;"
+                        + "left:-100px;top:-100px;overflow:hidden\" class=\"%s\">".formatted(cssClass));
 
                 // add an empty textfield (otherwise IE doesn't work)
                 buffer.append("<input title=\"text_hidden\" "
@@ -104,8 +102,7 @@ public abstract class ChangePasswordPanel extends Panel {
                 getResponse().write(buffer);
             }
         };
-        form.setOutputMarkupId(true);
-        add(form);
+        add(form.setOutputMarkupId(true));
 
         passwordField = new AjaxPasswordFieldPanel(
                 "password",
@@ -139,11 +136,10 @@ public abstract class ChangePasswordPanel extends Panel {
 
         captcha = new CaptchaPanel<>(EnduserConstants.CONTENT_PANEL);
         captcha.setOutputMarkupPlaceholderTag(true);
-
-        form.add(new CardPanel.Builder<CaptchaPanel<Void>>()
-                .setName("captcha")
-                .setComponent(captcha)
-                .isVisible(SyncopeWebApplication.get().isCaptchaEnabled()).build("captchaPanelCard"));
+        form.add(new CardPanel.Builder<CaptchaPanel<Void>>().
+                setName("captcha").
+                setComponent(captcha).
+                isVisible(SyncopeWebApplication.get().isCaptchaEnabled()).build("captchaPanelCard"));
 
         AjaxButton submitButton = new AjaxButton("submit", new Model<>(getString("submit"))) {
 

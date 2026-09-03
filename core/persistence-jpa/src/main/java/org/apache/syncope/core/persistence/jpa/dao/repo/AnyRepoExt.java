@@ -20,12 +20,9 @@ package org.apache.syncope.core.persistence.jpa.dao.repo;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
-import org.apache.syncope.core.persistence.api.dao.AllowedSchemas;
 import org.apache.syncope.core.persistence.api.entity.Any;
 import org.apache.syncope.core.persistence.api.entity.Relationship;
-import org.apache.syncope.core.persistence.api.entity.Schema;
 import org.apache.syncope.core.persistence.api.entity.anyobject.AnyObject;
 
 public interface AnyRepoExt<A extends Any> {
@@ -33,12 +30,6 @@ public interface AnyRepoExt<A extends Any> {
     Optional<OffsetDateTime> findLastChange(String key);
 
     A authFind(String key);
-
-    List<A> findByDerAttrValue(String expression, String value, boolean ignoreCaseMatch);
-
-    <S extends Schema> AllowedSchemas<S> findAllowedSchemas(A any, Class<S> reference);
-
-    List<String> findDynRealms(String key);
 
     Collection<String> findAllResourceKeys(String key);
 
@@ -49,4 +40,6 @@ public interface AnyRepoExt<A extends Any> {
     void deleteById(String key);
 
     void delete(A any);
+
+    void evict(Class<A> entityClass, String key);
 }

@@ -37,8 +37,6 @@ import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.request.AnyObjectCR;
-import org.apache.syncope.common.lib.request.GroupCR;
-import org.apache.syncope.common.lib.request.MembershipUR;
 import org.apache.syncope.common.lib.request.PasswordPatch;
 import org.apache.syncope.common.lib.request.ResourceDR;
 import org.apache.syncope.common.lib.request.StatusR;
@@ -49,7 +47,6 @@ import org.apache.syncope.common.lib.request.UserUR;
 import org.apache.syncope.common.lib.to.AnyTO;
 import org.apache.syncope.common.lib.to.AnyTypeClassTO;
 import org.apache.syncope.common.lib.to.AnyTypeTO;
-import org.apache.syncope.common.lib.to.GroupTO;
 import org.apache.syncope.common.lib.to.MembershipTO;
 import org.apache.syncope.common.lib.to.PagedResult;
 import org.apache.syncope.common.lib.to.PlainSchemaTO;
@@ -89,7 +86,7 @@ public class AuthenticationITCase extends AbstractITCase {
 
         // 3. as admin
         self = ADMIN_CLIENT.self();
-        assertEquals(ANONYMOUS_CLIENT.platform().getEntitlements().size(), self.entitlements().size());
+        assertEquals(ANONYMOUS_CLIENT.platform().entitlements().size(), self.entitlements().size());
         assertFalse(self.entitlements().containsKey(IdRepoEntitlement.ANONYMOUS));
         assertEquals(List.of(), self.delegations());
         assertEquals(ADMIN_UNAME, self.user().getUsername());
@@ -179,13 +176,7 @@ public class AuthenticationITCase extends AbstractITCase {
         UserService userService2 = CLIENT_FACTORY.create(userTO.getUsername(), "password123").
                 getService(UserService.class);
 
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         PagedResult<UserTO> matchingUsers = userService2.search(new AnyQuery.Builder().
                 realm(SyncopeConstants.ROOT_REALM).
@@ -401,7 +392,7 @@ public class AuthenticationITCase extends AbstractITCase {
         String anyTypeKey = "FOLDER " + getUUIDString();
 
         // 1. no entitlement exists (yet) for the any type to be created
-        assertFalse(ANONYMOUS_CLIENT.platform().getEntitlements().stream().
+        assertFalse(ANONYMOUS_CLIENT.platform().entitlements().stream().
                 anyMatch(entitlement -> entitlement.contains(anyTypeKey)));
 
         // 2. create plain schema, any type class and any type
@@ -422,7 +413,7 @@ public class AuthenticationITCase extends AbstractITCase {
         ANY_TYPE_SERVICE.create(anyTypeTO);
 
         // 2. now entitlement exists for the any type just created
-        assertTrue(ANONYMOUS_CLIENT.platform().getEntitlements().stream().
+        assertTrue(ANONYMOUS_CLIENT.platform().entitlements().stream().
                 anyMatch(entitlement -> entitlement.contains(anyTypeKey)));
 
         // 3. attempt to create an instance of the type above: fail because no entitlement was assigned
@@ -460,108 +451,6 @@ public class AuthenticationITCase extends AbstractITCase {
         belliniClient.logout();
         belliniClient.login(new BasicAuthenticationHandler("bellini", ADMIN_PWD));
         belliniClient.getService(AnyObjectService.class).create(folder);
-    }
-
-    @Test
-    public void asGroupOwner() {
-        // 0. prepare
-        UserTO owner = createUser(UserITCase.getUniqueSample("owner@syncope.org")).getEntity();
-        assertNotNull(owner);
-
-        GroupCR groupCR = GroupITCase.getSample("forgroupownership");
-        groupCR.setUserOwner(owner.getKey());
-        GroupTO group = createGroup(groupCR).getEntity();
-        assertNotNull(group);
-        assertEquals(owner.getKey(), group.getUserOwner());
-
-        UserCR memberCR = UserITCase.getUniqueSample("forgroupownership@syncope.org");
-        memberCR.getMemberships().add(new MembershipTO.Builder(group.getKey()).build());
-        memberCR.getMemberships().add(new MembershipTO.Builder("37d15e4c-cdc1-460b-a591-8505c8133806").build());
-        UserTO member = createUser(memberCR).getEntity();
-        assertEquals(2, member.getMemberships().size());
-        String memberKey = member.getKey();
-
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
-
-        PagedResult<UserTO> matching = USER_SERVICE.search(
-                new AnyQuery.Builder().realm(SyncopeConstants.ROOT_REALM).
-                        fiql(SyncopeClient.getUserSearchConditionBuilder().inGroups(group.getKey()).query()).
-                        page(1).size(1000).build());
-        int fullMatchSize = matching.getResult().size();
-        assertTrue(matching.getResult().stream().anyMatch(user -> memberKey.equals(user.getKey())));
-
-        UserService groupOwnerService = CLIENT_FACTORY.create(owner.getUsername(), "password123").
-                getService(UserService.class);
-
-        // 1. search
-        matching = groupOwnerService.search(
-                new AnyQuery.Builder().realm(SyncopeConstants.ROOT_REALM).
-                        fiql(SyncopeClient.getUserSearchConditionBuilder().isNotNull("key").query()).
-                        page(1).size(1000).build());
-        assertEquals(fullMatchSize, matching.getResult().size());
-        assertTrue(matching.getResult().stream().anyMatch(user -> memberKey.equals(user.getKey())));
-
-        // 2. update and read
-        UserUR memberUR = new UserUR();
-        memberUR.setKey(memberKey);
-        memberUR.setUsername(new StringReplacePatchItem.Builder().value("new" + getUUIDString()).build());
-
-        Response response = groupOwnerService.update(memberUR);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-
-        member = groupOwnerService.read(memberKey);
-        assertEquals(memberUR.getUsername().getValue(), member.getUsername());
-        assertEquals(2, member.getMemberships().size());
-
-        // 3. update with membership removal -> fail
-        memberUR.setUsername(null);
-        memberUR.getMemberships().add(new MembershipUR.Builder(group.getKey()).
-                operation(PatchOperation.DELETE).build());
-        try {
-            groupOwnerService.update(memberUR);
-            fail();
-        } catch (SyncopeClientException e) {
-            assertEquals(ClientExceptionType.DelegatedAdministration, e.getType());
-        }
-
-        // 4. update non-member -> fail
-        UserTO nonmember = createUser(UserITCase.getUniqueSample("nonmember@syncope.org")).getEntity();
-        UserUR nonmemberUR = new UserUR();
-        nonmemberUR.setKey(nonmember.getKey());
-        nonmemberUR.setUsername(new StringReplacePatchItem.Builder().value("new" + getUUIDString()).build());
-        try {
-            groupOwnerService.update(nonmemberUR);
-            fail();
-        } catch (SyncopeClientException e) {
-            assertEquals(ClientExceptionType.DelegatedAdministration, e.getType());
-        }
-
-        // 5. update user under /even
-        memberCR = UserITCase.getUniqueSample("forgroupownership2@syncope.org");
-        memberCR.setRealm("/even");
-        memberCR.getMemberships().add(new MembershipTO.Builder(group.getKey()).build());
-        member = createUser(memberCR).getEntity();
-
-        memberUR = new UserUR();
-        memberUR.setKey(member.getKey());
-        memberUR.setUsername(new StringReplacePatchItem.Builder().value("new" + getUUIDString()).build());
-        response = groupOwnerService.update(memberUR);
-        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
-
-        // 6 delete
-        groupOwnerService.delete(memberKey);
-        try {
-            USER_SERVICE.read(memberKey);
-            fail();
-        } catch (SyncopeClientException e) {
-            assertEquals(ClientExceptionType.NotFound, e.getType());
-        }
     }
 
     @Test

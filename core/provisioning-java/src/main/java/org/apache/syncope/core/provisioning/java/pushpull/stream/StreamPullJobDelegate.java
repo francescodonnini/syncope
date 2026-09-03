@@ -44,12 +44,12 @@ import org.apache.syncope.core.persistence.api.entity.policy.InboundPolicy;
 import org.apache.syncope.core.persistence.api.entity.task.PullTask;
 import org.apache.syncope.core.provisioning.api.Connector;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.InboundActions;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
 import org.apache.syncope.core.provisioning.api.pushpull.SyncopePullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.stream.SyncopeStreamPullExecutor;
 import org.apache.syncope.core.provisioning.java.pushpull.PullJobDelegate;
-import org.apache.syncope.core.provisioning.java.pushpull.PullResultHandlerDispatcher;
 import org.apache.syncope.core.provisioning.java.utils.MappingUtils;
 import org.apache.syncope.core.spring.security.SecureRandomUtils;
 import org.identityconnectors.framework.common.objects.ObjectClass;
@@ -191,13 +191,12 @@ public class StreamPullJobDelegate extends PullJobDelegate implements SyncopeStr
                     executor,
                     false);
 
-            dispatcher = new PullResultHandlerDispatcher(profile, this);
+            dispatcher = buildDispatcher();
 
             for (InboundActions action : profile.getActions()) {
                 action.beforeAll(profile);
             }
 
-            ghandler = buildGroupHandler();
             dispatcher.addHandlerSupplier(provision.getObjectClass(), () -> {
                 SyncopePullResultHandler handler;
                 switch (anyType.getKind()) {
@@ -206,7 +205,7 @@ public class StreamPullJobDelegate extends PullJobDelegate implements SyncopeStr
                         break;
 
                     case GROUP:
-                        handler = ghandler;
+                        handler = buildGroupHandler();
                         break;
 
                     case ANY_OBJECT:
@@ -228,10 +227,12 @@ public class StreamPullJobDelegate extends PullJobDelegate implements SyncopeStr
                             MappingUtils.getInboundItems(provision.getMapping().getItems().stream()),
                             moreAttrsToGet.toArray(String[]::new)));
 
+            AnyPullResultHandler handler =
+                    (AnyPullResultHandler) dispatcher.nonConcurrentHandler(provision.getObjectClass());
             try {
-                setGroupOwners();
+                handler.setManagers();
             } catch (Exception e) {
-                LOG.error("While setting group owners", e);
+                LOG.error("While setting managers", e);
             }
 
             for (InboundActions action : profile.getActions()) {

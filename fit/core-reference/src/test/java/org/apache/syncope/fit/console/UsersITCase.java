@@ -35,6 +35,8 @@ import org.junit.jupiter.api.Test;
 
 public class UsersITCase extends AbstractConsoleITCase {
 
+    private static final String USER_TAB = "body:content:body:container:content:tabbedPanel:tabs-container:tabs:0:link";
+
     private static final String TAB_PANEL = "body:content:body:container:content:tabbedPanel:panel:searchResult:";
 
     private static final String CONTAINER = TAB_PANEL + "container:content:";
@@ -46,8 +48,8 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void filteredSearch() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:accordionPanel:tabs:0:title");
@@ -69,8 +71,8 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void forceChangePassword() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "verdi");
@@ -86,8 +88,8 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void clickToCloneUser() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -95,10 +97,10 @@ public class UsersITCase extends AbstractConsoleITCase {
 
         TESTER.executeAjaxEvent(component.getPageRelativePath(), Constants.ON_CLICK);
         TESTER.clickLink(TAB_PANEL + "outerObjectsRepeater:1:outer:container:content:togglePanelContainer:container:"
-                + "actions:actions:actionRepeater:10:action:action");
+                + "actions:actions:actionRepeater:11:action:action");
 
         TESTER.assertComponent(TAB_PANEL
-                + "outerObjectsRepeater:0:outer:form:content:form:view:username:textField",
+                + "outerObjectsRepeater:0:outer:form:content:form:view:usernameInnerForm:username:textField",
                 TextField.class);
 
         FormTester formTester = TESTER.newFormTester(TAB_PANEL
@@ -110,8 +112,8 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void editUser() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "puccini");
@@ -123,7 +125,7 @@ public class UsersITCase extends AbstractConsoleITCase {
                 + "actions:actions:actionRepeater:0:action:action");
 
         TESTER.assertComponent(TAB_PANEL
-                + "outerObjectsRepeater:0:outer:form:content:form:view:username:textField",
+                + "outerObjectsRepeater:0:outer:form:content:form:view:usernameInnerForm:username:textField",
                 TextField.class);
 
         FormTester formTester = TESTER.newFormTester(TAB_PANEL
@@ -176,14 +178,14 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void editUserMembership() {
-        TESTER.clickLink("body:realmsLI:realms", false);
+        TESTER.clickLink(ANY_PAGE, false);
         TESTER.executeAjaxEvent("body:content:realmChoicePanel:container"
                 + ":realmsFragment:realms:btn", Constants.ON_CLICK);
         TESTER.executeAjaxEvent("body:content:realmChoicePanel:container"
                 + ":realmsFragment:realms:dropdown-menu:buttons:2:button",
                 Constants.ON_CLICK);
 
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "puccini");
@@ -274,14 +276,14 @@ public class UsersITCase extends AbstractConsoleITCase {
 
     @Test
     public void editUserMemberships() {
-        TESTER.clickLink("body:realmsLI:realms", false);
+        TESTER.clickLink(ANY_PAGE, false);
         TESTER.executeAjaxEvent("body:content:realmChoicePanel:container"
                 + ":realmsFragment:realms:btn", Constants.ON_CLICK);
         TESTER.executeAjaxEvent("body:content:realmChoicePanel:container"
                 + ":realmsFragment:realms:dropdown-menu:buttons:2:button",
                 Constants.ON_CLICK);
 
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -509,9 +511,9 @@ public class UsersITCase extends AbstractConsoleITCase {
     }
 
     @Test
-    public void checkDeleteUsrLink() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+    public void checkDeleteUserLink() {
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -520,14 +522,14 @@ public class UsersITCase extends AbstractConsoleITCase {
         TESTER.executeAjaxEvent(component.getPageRelativePath(), Constants.ON_CLICK);
         TESTER.assertComponent(TAB_PANEL
                 + "outerObjectsRepeater:1:outer:container:content:togglePanelContainer:container:"
-                + "actions:actions:actionRepeater:11:action:action", IndicatingOnConfirmAjaxLink.class);
+                + "actions:actions:actionRepeater:12:action:action", IndicatingOnConfirmAjaxLink.class);
     }
 
     @Disabled
     @Test
     public void editDateTimeField() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "puccini");
@@ -539,7 +541,7 @@ public class UsersITCase extends AbstractConsoleITCase {
                 + "actions:actions:actionRepeater:0:action:action");
 
         TESTER.assertComponent(TAB_PANEL
-                + "outerObjectsRepeater:0:outer:form:content:form:view:username:textField",
+                + "outerObjectsRepeater:0:outer:form:content:form:view:usernameInnerForm:username:textField",
                 TextField.class);
 
         FormTester formTester = TESTER.newFormTester(TAB_PANEL
@@ -585,7 +587,7 @@ public class UsersITCase extends AbstractConsoleITCase {
                 + "actions:actions:actionRepeater:0:action:action");
 
         TESTER.assertComponent(TAB_PANEL
-                + "outerObjectsRepeater:0:outer:form:content:form:view:username:textField",
+                + "outerObjectsRepeater:0:outer:form:content:form:view:usernameInnerForm:username:textField",
                 TextField.class);
 
         formTester = TESTER.newFormTester(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:form");
@@ -619,8 +621,8 @@ public class UsersITCase extends AbstractConsoleITCase {
     public void changePassword() {
         TESTER.cleanupFeedbackMessages();
 
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "vivaldi");
@@ -645,8 +647,8 @@ public class UsersITCase extends AbstractConsoleITCase {
         assertSuccessMessage();
         TESTER.cleanupFeedbackMessages();
 
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink(USER_TAB);
 
         component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "vivaldi");

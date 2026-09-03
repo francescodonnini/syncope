@@ -29,11 +29,11 @@ import org.apache.syncope.common.lib.request.AnyObjectCR;
 import org.apache.syncope.common.lib.request.AnyObjectUR;
 import org.apache.syncope.common.lib.to.AnyObjectTO;
 import org.apache.syncope.common.lib.to.ConnObject;
-import org.apache.syncope.common.lib.to.MembershipTO;
 import org.apache.syncope.common.lib.to.RelationshipTO;
 import org.apache.syncope.common.lib.types.AnyTypeKind;
 import org.apache.syncope.common.lib.types.ClientExceptionType;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
+import org.apache.syncope.core.persistence.api.dao.AnyChecker;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeClassDAO;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
@@ -72,6 +72,7 @@ public class AnyObjectDataBinderImpl extends AnyDataBinder implements AnyObjectD
             final PlainSchemaDAO plainSchemaDAO,
             final ExternalResourceDAO resourceDAO,
             final RelationshipTypeDAO relationshipTypeDAO,
+            final AnyChecker anyChecker,
             final EntityFactory entityFactory,
             final AnyUtilsFactory anyUtilsFactory,
             final DerAttrHandler derAttrHandler,
@@ -90,6 +91,7 @@ public class AnyObjectDataBinderImpl extends AnyDataBinder implements AnyObjectD
                 plainSchemaDAO,
                 resourceDAO,
                 relationshipTypeDAO,
+                anyChecker,
                 entityFactory,
                 anyUtilsFactory,
                 derAttrHandler,
@@ -123,15 +125,7 @@ public class AnyObjectDataBinderImpl extends AnyDataBinder implements AnyObjectD
         anyObjectTO.setLastChangeDate(anyObject.getLastChangeDate());
         anyObjectTO.setLastChangeContext(anyObject.getLastChangeContext());
 
-        fillTO(anyObjectTO,
-                anyObject.getRealm().getFullPath(),
-                anyObject.getAuxClasses(),
-                anyObject.getPlainAttrs(),
-                derAttrHandler.getValues(anyObject),
-                anyObjectDAO.findAllResources(anyObject));
-
-        // dynamic realms
-        anyObjectTO.getDynRealms().addAll(anyObjectDAO.findDynRealms(anyObject.getKey()));
+        fillTO(anyObject, anyObjectTO, derAttrHandler.getValues(anyObject), anyObjectDAO.findAllResources(anyObject));
 
         if (details) {
             // relationships
@@ -154,12 +148,6 @@ public class AnyObjectDataBinderImpl extends AnyDataBinder implements AnyObjectD
                     anyObject.getPlainAttrs(membership),
                     derAttrHandler.getValues((Groupable<?, ?, ?>) anyObject, membership),
                     membership)).toList());
-
-            // dynamic memberships
-            anyObjectTO.getDynMemberships().addAll(
-                    anyObjectDAO.findDynGroups(anyObject.getKey()).stream().
-                            map(group -> new MembershipTO.Builder(group.getKey()).groupName(group.getName()).build()).
-                            toList());
         }
 
         return anyObjectTO;
@@ -215,6 +203,8 @@ public class AnyObjectDataBinderImpl extends AnyDataBinder implements AnyObjectD
 
     @Override
     public PropagationByResource<String> update(final AnyObject toBeUpdated, final AnyObjectUR anyObjectUR) {
+        processAuxClasses(toBeUpdated, anyObjectUR);
+
         // Re-merge any pending change from workflow tasks
         AnyObject anyObject = anyObjectDAO.save(toBeUpdated);
 

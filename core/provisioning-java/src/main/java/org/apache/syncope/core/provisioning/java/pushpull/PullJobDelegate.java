@@ -33,7 +33,8 @@ import org.apache.syncope.core.persistence.api.entity.policy.InboundPolicy;
 import org.apache.syncope.core.persistence.api.entity.task.PullTask;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionContext;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
-import org.apache.syncope.core.provisioning.api.job.StoppableSchedTaskJobDelegate;
+import org.apache.syncope.core.provisioning.api.job.StoppableJobDelegate;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPullResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.InboundActions;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
 import org.apache.syncope.core.provisioning.api.pushpull.RealmPullResultHandler;
@@ -48,7 +49,7 @@ import org.identityconnectors.framework.common.objects.OperationOptions;
 
 public class PullJobDelegate
         extends AbstractPullExecutor<PullTask>
-        implements SyncopePullExecutor, StoppableSchedTaskJobDelegate {
+        implements SyncopePullExecutor, StoppableJobDelegate {
 
     protected Optional<ReconFilterBuilder> perContextReconFilterBuilder = Optional.empty();
 
@@ -78,7 +79,7 @@ public class PullJobDelegate
                 executor,
                 context.isDryRun());
 
-        dispatcher = new PullResultHandlerDispatcher(profile, this);
+        dispatcher = buildDispatcher();
     }
 
     @Override
@@ -122,7 +123,8 @@ public class PullJobDelegate
                                     ConnObjectUtils.toSyncToken(orgUnit.getSyncToken()));
                         }
 
-                        connector.sync(new ObjectClass(orgUnit.getObjectClass()),
+                        connector.sync(
+                                new ObjectClass(orgUnit.getObjectClass()),
                                 ConnObjectUtils.toSyncToken(orgUnit.getSyncToken()),
                                 dispatcher,
                                 options);
@@ -135,7 +137,8 @@ public class PullJobDelegate
                         break;
 
                     case FILTERED_RECONCILIATION:
-                        connector.filteredReconciliation(new ObjectClass(orgUnit.getObjectClass()),
+                        connector.filteredReconciliation(
+                                new ObjectClass(orgUnit.getObjectClass()),
                                 getReconFilterBuilder(task),
                                 dispatcher,
                                 options);
@@ -155,10 +158,8 @@ public class PullJobDelegate
         }
 
         // ...then provisions for any types
-        ghandler = buildGroupHandler();
         for (Provision provision : task.getResource().getProvisions().stream().
-                filter(provision -> provision.getMapping() != null).sorted(provisionSorter).
-                toList()) {
+                filter(provision -> provision.getMapping() != null).sorted(provisionSorter).toList()) {
 
             setStatus("Pulling " + provision.getObjectClass());
 
@@ -173,7 +174,7 @@ public class PullJobDelegate
                         break;
 
                     case GROUP:
-                        handler = ghandler;
+                        handler = buildGroupHandler();
                         break;
 
                     case ANY_OBJECT:
@@ -244,32 +245,35 @@ public class PullJobDelegate
         dispatcher.shutdown();
 
         for (Provision provision : task.getResource().getProvisions().stream().
-                filter(provision -> provision.getMapping() != null && provision.getUidOnCreate() != null).
-                sorted(provisionSorter).toList()) {
+                filter(provision -> provision.getMapping() != null).sorted(provisionSorter).toList()) {
 
-            try {
-                AnyType anyType = anyTypeDAO.findById(provision.getAnyType()).
-                        orElseThrow(() -> new NotFoundException("AnyType" + provision.getAnyType()));
-                AnyUtils anyUtils = anyUtilsFactory.getInstance(anyType.getKind());
-                profile.getResults().stream().
-                        filter(result -> result.getUidValue() != null && result.getKey() != null
-                        && result.getOperation() == ResourceOperation.CREATE
-                        && result.getAnyType().equals(provision.getAnyType())).
-                        forEach(result -> anyUtils.addAttr(
-                        validator,
-                        result.getKey(),
-                        plainSchemaDAO.findById(provision.getUidOnCreate()).
-                                orElseThrow(() -> new NotFoundException("PlainSchema " + provision.getUidOnCreate())),
-                        result.getUidValue()));
-            } catch (Throwable t) {
-                LOG.error("While setting UID on create", t);
+            if (provision.getUidOnCreate() != null) {
+                try {
+                    AnyType anyType = anyTypeDAO.findById(provision.getAnyType()).
+                            orElseThrow(() -> new NotFoundException("AnyType" + provision.getAnyType()));
+                    AnyUtils anyUtils = anyUtilsFactory.getInstance(anyType.getKind());
+                    profile.getResults().stream().
+                            filter(result -> result.getUidValue() != null && result.getKey() != null
+                            && result.getOperation() == ResourceOperation.CREATE
+                            && result.getAnyType().equals(provision.getAnyType())).
+                            forEach(result -> anyUtils.addAttr(
+                            validator,
+                            result.getKey(),
+                            plainSchemaDAO.findById(provision.getUidOnCreate()).orElseThrow(
+                                    () -> new NotFoundException("PlainSchema " + provision.getUidOnCreate())),
+                            result.getUidValue()));
+                } catch (Throwable t) {
+                    LOG.error("While setting UID on create", t);
+                }
             }
-        }
 
-        try {
-            setGroupOwners();
-        } catch (Exception e) {
-            LOG.error("While setting group owners", e);
+            AnyPullResultHandler handler =
+                    (AnyPullResultHandler) dispatcher.nonConcurrentHandler(provision.getObjectClass());
+            try {
+                handler.setManagers();
+            } catch (Exception e) {
+                LOG.error("While setting managers", e);
+            }
         }
 
         if (!profile.isDryRun()) {

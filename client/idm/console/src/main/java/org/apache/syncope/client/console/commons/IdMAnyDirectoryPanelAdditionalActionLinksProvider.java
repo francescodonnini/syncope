@@ -100,7 +100,7 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
         }, ActionLink.ActionType.ENABLE);
         enable.setEntitlements(IdRepoEntitlement.USER_UPDATE);
         enable.setOnConfirm(false);
-        enable.setRealms(realm, model.getObject().getDynRealms());
+        enable.setRealm(realm);
         actions.add(enable);
 
         Action<UserTO> manageResources = new Action<>(new ActionLink<>() {
@@ -126,9 +126,9 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
             }
         }, ActionLink.ActionType.MANAGE_RESOURCES);
         manageResources.setEntitlements(
-                String.format("%s,%s", IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE));
+                "%s,%s".formatted(IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE));
         manageResources.setOnConfirm(false);
-        manageResources.setRealms(realm, model.getObject().getDynRealms());
+        manageResources.setRealm(realm);
         actions.add(manageResources);
 
         Action<UserTO> manageAccounts = new Action<>(new ActionLink<>() {
@@ -146,10 +146,10 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
                 modal.show(true);
             }
         }, ActionLink.ActionType.MANAGE_ACCOUNTS);
-        manageAccounts.setEntitlements(String.format("%s,%s,%s",
+        manageAccounts.setEntitlements("%s,%s,%s".formatted(
                 IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE, IdMEntitlement.RESOURCE_GET_CONNOBJECT));
         manageAccounts.setOnConfirm(false);
-        manageAccounts.setRealms(realm, model.getObject().getDynRealms());
+        manageAccounts.setRealm(realm);
         actions.add(manageAccounts);
 
         Action<UserTO> mergeAccounts = new Action<>(new ActionLink<>() {
@@ -167,7 +167,7 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
                 modal.show(true);
             }
         }, ActionLink.ActionType.MERGE_ACCOUNTS);
-        mergeAccounts.setEntitlements(String.format("%s,%s,%s,%s",
+        mergeAccounts.setEntitlements("%s,%s,%s,%s".formatted(
                 IdRepoEntitlement.USER_READ, IdRepoEntitlement.USER_UPDATE, IdRepoEntitlement.USER_DELETE,
                 IdMEntitlement.RESOURCE_GET_CONNOBJECT));
         actions.add(mergeAccounts);
@@ -207,9 +207,9 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
             }
         }, ActionLink.ActionType.MANAGE_RESOURCES);
         manageResources.setEntitlements(
-                String.format("%s,%s", IdRepoEntitlement.GROUP_READ, IdRepoEntitlement.GROUP_UPDATE));
+                "%s,%s".formatted(IdRepoEntitlement.GROUP_READ, IdRepoEntitlement.GROUP_UPDATE));
         manageResources.setOnConfirm(false);
-        manageResources.setRealms(realm, modelObject.getDynRealms());
+        manageResources.setRealm(realm);
         actions.add(manageResources);
 
         return actions;
@@ -249,8 +249,8 @@ public class IdMAnyDirectoryPanelAdditionalActionLinksProvider
             }
         }, ActionLink.ActionType.MANAGE_RESOURCES);
         manageResources.setEntitlements(
-                String.format("%s,%s", AnyEntitlement.READ.getFor(type), AnyEntitlement.UPDATE.getFor(type)));
-        manageResources.setRealms(realm, modelObject.getDynRealms());
+                "%s,%s".formatted(AnyEntitlement.READ.getFor(type), AnyEntitlement.UPDATE.getFor(type)));
+        manageResources.setRealm(realm);
         actions.add(manageResources);
         return actions;
     }

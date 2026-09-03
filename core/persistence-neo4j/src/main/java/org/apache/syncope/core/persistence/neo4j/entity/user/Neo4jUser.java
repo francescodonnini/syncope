@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.persistence.neo4j.entity.user;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.OffsetDateTime;
@@ -28,8 +27,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.types.CipherAlgorithm;
+import org.apache.syncope.common.lib.types.Mfa;
 import org.apache.syncope.core.persistence.api.ApplicationContextProvider;
+import org.apache.syncope.core.persistence.api.Encryptor;
 import org.apache.syncope.core.persistence.api.EncryptorManager;
 import org.apache.syncope.core.persistence.api.dao.AnyTypeDAO;
 import org.apache.syncope.core.persistence.api.entity.AnyType;
@@ -55,6 +57,7 @@ import org.apache.syncope.core.spring.security.SecureRandomUtils;
 import org.springframework.data.neo4j.core.schema.CompositeProperty;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Relationship;
+import tools.jackson.core.type.TypeReference;
 
 @Node(Neo4jUser.NODE)
 @AttributableCheck
@@ -74,7 +77,7 @@ public class Neo4jUser
 
     public static final String USER_GROUP_MEMBERSHIP_REL = "USER_GROUP_MEMBERSHIP";
 
-    public static final String USER_SECURITY_QUESTION_REL = "USER_SECURITY_QUESTION";
+    public static final String USER_SECURITYQUESTION_REL = "USER_SECURITY_QUESTION";
 
     protected static final TypeReference<List<String>> TYPEREF = new TypeReference<List<String>>() {
     };
@@ -120,10 +123,10 @@ public class Neo4jUser
     /**
      * Provisioning external resources.
      */
-    @Relationship(type = USER_RESOURCE_REL, direction = Relationship.Direction.OUTGOING)
+    @Relationship(type = USER_RESOURCE_REL, direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     protected List<Neo4jExternalResource> resources = new ArrayList<>();
 
-    @Relationship(type = USER_AUX_CLASSES_REL, direction = Relationship.Direction.OUTGOING)
+    @Relationship(type = USER_AUX_CLASSES_REL, direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     protected List<Neo4jAnyTypeClass> auxClasses = new ArrayList<>();
 
     @Relationship(type = Neo4jURelationship.SOURCE_REL, direction = Relationship.Direction.INCOMING)
@@ -132,17 +135,23 @@ public class Neo4jUser
     @Relationship(type = USER_GROUP_MEMBERSHIP_REL, direction = Relationship.Direction.INCOMING)
     protected List<Neo4jUMembership> memberships = new ArrayList<>();
 
-    @Relationship(type = ROLE_MEMBERSHIP_REL, direction = Relationship.Direction.OUTGOING)
+    @Relationship(type = ROLE_MEMBERSHIP_REL, direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     protected List<Neo4jRole> roles = new ArrayList<>();
 
-    @Relationship(type = USER_SECURITY_QUESTION_REL, direction = Relationship.Direction.OUTGOING)
+    @Relationship(type = USER_SECURITYQUESTION_REL, direction = Relationship.Direction.OUTGOING, cascadeUpdates = false)
     protected Neo4jSecurityQuestion securityQuestion;
 
     protected String securityAnswer;
 
+    protected String mfa;
+
     @Relationship(direction = Relationship.Direction.INCOMING)
     @Valid
     protected List<Neo4jLinkedAccount> linkedAccounts = new ArrayList<>();
+
+    protected Encryptor encryptor() {
+        return ApplicationContextProvider.getApplicationContext().getBean(EncryptorManager.class).getInstance();
+    }
 
     @Override
     protected Map<String, PlainAttr> plainAttrs() {
@@ -194,13 +203,13 @@ public class Neo4jUser
     }
 
     protected String encode(final String value) throws Exception {
-        return ApplicationContextProvider.getApplicationContext().getBean(EncryptorManager.class).getInstance().encode(
+        return encryptor().encode(
                 value,
                 Optional.ofNullable(cipherAlgorithm).
                         orElseGet(() -> CipherAlgorithm.valueOf(
                         ApplicationContextProvider.getBeanFactory().getBean(ConfParamOps.class).get(
                                 AuthContextUtils.getDomain(),
-                                "password.cipher.algorithm",
+                                StandardConfParams.PASSWORD_CIPHER_ALGORITHM,
                                 CipherAlgorithm.AES.name(),
                                 String.class))));
     }
@@ -380,6 +389,33 @@ public class Neo4jUser
     @Override
     public void setEncodedSecurityAnswer(final String securityAnswer) {
         this.securityAnswer = securityAnswer;
+    }
+
+    @Override
+    public Mfa getMfa() {
+        if (mfa == null) {
+            return null;
+        }
+
+        try {
+            return POJOHelper.deserialize(encryptor().decode(mfa, CipherAlgorithm.AES), Mfa.class);
+        } catch (Exception e) {
+            LOG.error("Could not read Mfa", e);
+            return null;
+        }
+    }
+
+    @Override
+    public void setMfa(final Mfa mfa) {
+        if (mfa == null) {
+            this.mfa = null;
+        } else {
+            try {
+                this.mfa = encryptor().encode(POJOHelper.serialize(mfa), CipherAlgorithm.AES);
+            } catch (Exception e) {
+                LOG.error("Could not save Mfa", e);
+            }
+        }
     }
 
     @Override

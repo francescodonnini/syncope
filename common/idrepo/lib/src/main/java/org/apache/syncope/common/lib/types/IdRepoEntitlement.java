@@ -30,6 +30,8 @@ public final class IdRepoEntitlement {
 
     public static final String MUST_CHANGE_PASSWORD = "MUST_CHANGE_PASSWORD";
 
+    public static final String MFA_ENROLL = "MFA_ENROLL";
+
     public static final String DOMAIN_CREATE = "DOMAIN_CREATE";
 
     public static final String DOMAIN_READ = "DOMAIN_READ";
@@ -85,14 +87,6 @@ public final class IdRepoEntitlement {
     public static final String ROLE_UPDATE = "ROLE_UPDATE";
 
     public static final String ROLE_DELETE = "ROLE_DELETE";
-
-    public static final String DYNREALM_CREATE = "DYNREALM_CREATE";
-
-    public static final String DYNREALM_READ = "DYNREALM_READ";
-
-    public static final String DYNREALM_UPDATE = "DYNREALM_UPDATE";
-
-    public static final String DYNREALM_DELETE = "DYNREALM_DELETE";
 
     public static final String SCHEMA_CREATE = "SCHEMA_CREATE";
 
@@ -247,6 +241,7 @@ public final class IdRepoEntitlement {
         }
         values.remove(ANONYMOUS);
         values.remove(MUST_CHANGE_PASSWORD);
+        values.remove(MFA_ENROLL);
         VALUES = Collections.unmodifiableSet(values);
     }
 

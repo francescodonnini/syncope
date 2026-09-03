@@ -19,11 +19,10 @@
 package org.apache.syncope.core.persistence.jpa;
 
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
+import java.util.TimeZone;
 import org.apache.syncope.core.persistence.api.attrvalue.PlainAttrValidationManager;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.AnySearchDAO;
-import org.apache.syncope.core.persistence.api.dao.DynRealmDAO;
 import org.apache.syncope.core.persistence.api.dao.ExternalResourceDAO;
 import org.apache.syncope.core.persistence.api.dao.GroupDAO;
 import org.apache.syncope.core.persistence.api.dao.PlainSchemaDAO;
@@ -31,10 +30,15 @@ import org.apache.syncope.core.persistence.api.dao.RealmSearchDAO;
 import org.apache.syncope.core.persistence.api.dao.UserDAO;
 import org.apache.syncope.core.persistence.api.entity.AnyUtilsFactory;
 import org.apache.syncope.core.persistence.api.entity.EntityFactory;
+import org.apache.syncope.core.persistence.api.utils.RealmUtils;
 import org.apache.syncope.core.persistence.jpa.dao.MariaDBJPAAnySearchDAO;
+import org.apache.syncope.core.persistence.jpa.dao.MariaDBJPARealmSearchDAO;
 import org.apache.syncope.core.persistence.jpa.dao.repo.MariaDBPlainSchemaRepoExtImpl;
 import org.apache.syncope.core.persistence.jpa.dao.repo.PlainSchemaRepoExt;
 import org.apache.syncope.core.persistence.jpa.entity.MariaDBEntityFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -46,6 +50,23 @@ import org.springframework.context.annotation.Lazy;
         prefix = PersistenceProperties.PREFIX, name = PersistenceProperties.DB_TYPE, havingValue = "MARIADB")
 public class MariaDBPersistenceContext {
 
+    /**
+     * This is required for correct handling of OffsetDateTime values.
+     */
+    public static class GlobalTimezoneBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
+
+        @Override
+        public void postProcessBeanFactory(final ConfigurableListableBeanFactory beanFactory) throws BeansException {
+            TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        }
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public GlobalTimezoneBeanFactoryPostProcessor globalTimezoneBeanFactoryPostProcessor() {
+        return new GlobalTimezoneBeanFactoryPostProcessor();
+    }
+
     @ConditionalOnMissingBean
     @Bean
     public EntityFactory entityFactory() {
@@ -56,7 +77,6 @@ public class MariaDBPersistenceContext {
     @Bean
     public AnySearchDAO anySearchDAO(
             final @Lazy RealmSearchDAO realmSearchDAO,
-            final @Lazy DynRealmDAO dynRealmDAO,
             final @Lazy UserDAO userDAO,
             final @Lazy GroupDAO groupDAO,
             final @Lazy AnyObjectDAO anyObjectDAO,
@@ -64,12 +84,10 @@ public class MariaDBPersistenceContext {
             final @Lazy EntityFactory entityFactory,
             final AnyUtilsFactory anyUtilsFactory,
             final PlainAttrValidationManager validator,
-            final EntityManagerFactory entityManagerFactory,
             final EntityManager entityManager) {
 
         return new MariaDBJPAAnySearchDAO(
                 realmSearchDAO,
-                dynRealmDAO,
                 userDAO,
                 groupDAO,
                 anyObjectDAO,
@@ -77,8 +95,28 @@ public class MariaDBPersistenceContext {
                 entityFactory,
                 anyUtilsFactory,
                 validator,
-                entityManagerFactory,
                 entityManager);
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public RealmSearchDAO realmSearchDAO(
+            final EntityManager entityManager,
+            final @Lazy PlainSchemaDAO plainSchemaDAO,
+            final @Lazy UserDAO userDAO,
+            final @Lazy GroupDAO groupDAO,
+            final @Lazy EntityFactory entityFactory,
+            final PlainAttrValidationManager validator,
+            final RealmUtils realmUtils) {
+
+        return new MariaDBJPARealmSearchDAO(
+                entityManager,
+                plainSchemaDAO,
+                userDAO,
+                groupDAO,
+                entityFactory,
+                validator,
+                realmUtils);
     }
 
     @ConditionalOnMissingBean

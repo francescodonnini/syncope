@@ -18,12 +18,10 @@
  */
 package org.apache.syncope.wa.starter.mapping;
 
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.syncope.common.lib.OIDCScopeConstants;
 import org.apache.syncope.common.lib.to.ClientAppTO;
 import org.apache.syncope.common.lib.to.OIDCRPClientAppTO;
 import org.apache.syncope.common.lib.types.OIDCGrantType;
@@ -31,8 +29,6 @@ import org.apache.syncope.common.lib.types.OIDCResponseType;
 import org.apache.syncope.common.lib.types.OIDCTokenEncryptionAlg;
 import org.apache.syncope.common.lib.types.OIDCTokenSigningAlg;
 import org.apache.syncope.common.lib.wa.WAClientApp;
-import org.apereo.cas.oidc.claims.OidcCustomScopeAttributeReleasePolicy;
-import org.apereo.cas.services.ChainingAttributeReleasePolicy;
 import org.apereo.cas.services.OidcRegisteredService;
 import org.apereo.cas.services.RegisteredService;
 import org.apereo.cas.services.RegisteredServiceAccessStrategy;
@@ -43,6 +39,9 @@ import org.apereo.cas.services.RegisteredServiceProxyGrantingTicketExpirationPol
 import org.apereo.cas.services.RegisteredServiceProxyTicketExpirationPolicy;
 import org.apereo.cas.services.RegisteredServiceServiceTicketExpirationPolicy;
 import org.apereo.cas.services.RegisteredServiceTicketGrantingTicketExpirationPolicy;
+import org.apereo.cas.support.oauth.services.DefaultRegisteredServiceOAuthAccessTokenExpirationPolicy;
+import org.apereo.cas.support.oauth.services.DefaultRegisteredServiceOAuthDeviceTokenExpirationPolicy;
+import org.apereo.cas.support.oauth.services.DefaultRegisteredServiceOAuthRefreshTokenExpirationPolicy;
 
 public class OIDCRPClientAppTOMapper extends AbstractClientAppMapper {
 
@@ -117,17 +116,37 @@ public class OIDCRPClientAppTOMapper extends AbstractClientAppMapper {
         service.setLogoutUrl(rp.getLogoutUri());
         service.setTokenEndpointAuthenticationMethod(rp.getTokenEndpointAuthenticationMethod().name());
 
-        service.setScopes(new HashSet<>(rp.getScopes()));
-
-        if (attributeReleasePolicy instanceof OidcCustomScopeAttributeReleasePolicy
-                || (attributeReleasePolicy instanceof ChainingAttributeReleasePolicy chain
-                && chain.getPolicies().stream().anyMatch(OidcCustomScopeAttributeReleasePolicy.class::isInstance))) {
-
-            service.getScopes().add(OIDCScopeConstants.SYNCOPE);
-        }
+        service.setScopes(rp.getScopes().stream().collect(Collectors.toSet()));
 
         setPolicies(service, authPolicy, mfaPolicy, accessStrategy, attributeReleasePolicy,
                 tgtExpirationPolicy, stExpirationPolicy, tgtProxyExpirationPolicy, stProxyExpirationPolicy);
+
+        if (rp.getAccessTokenMaxTimeToLive() != null
+                || rp.getAccessTokenTimeToKill() != null
+                || rp.getAccessTokenMaxActiveTokens() != null) {
+
+            DefaultRegisteredServiceOAuthAccessTokenExpirationPolicy policy =
+                    new DefaultRegisteredServiceOAuthAccessTokenExpirationPolicy();
+            Optional.ofNullable(rp.getAccessTokenMaxTimeToLive()).ifPresent(policy::setMaxTimeToLive);
+            Optional.ofNullable(rp.getAccessTokenTimeToKill()).ifPresent(policy::setTimeToKill);
+            Optional.ofNullable(rp.getAccessTokenMaxActiveTokens()).ifPresent(policy::setMaxActiveTokens);
+            service.setAccessTokenExpirationPolicy(policy);
+        }
+
+        if (rp.getRefreshTokenTimeToKill() != null || rp.getRefreshTokenMaxActiveTokens() != null) {
+            DefaultRegisteredServiceOAuthRefreshTokenExpirationPolicy policy =
+                    new DefaultRegisteredServiceOAuthRefreshTokenExpirationPolicy();
+            Optional.ofNullable(rp.getRefreshTokenTimeToKill()).ifPresent(policy::setTimeToKill);
+            Optional.ofNullable(rp.getRefreshTokenMaxActiveTokens()).ifPresent(policy::setMaxActiveTokens);
+            service.setRefreshTokenExpirationPolicy(policy);
+        }
+
+        Optional.ofNullable(rp.getDeviceTokenTimeToKill()).ifPresent(timeToKill -> {
+            DefaultRegisteredServiceOAuthDeviceTokenExpirationPolicy policy =
+                    new DefaultRegisteredServiceOAuthDeviceTokenExpirationPolicy();
+            policy.setTimeToKill(timeToKill);
+            service.setDeviceTokenExpirationPolicy(policy);
+        });
 
         return service;
     }

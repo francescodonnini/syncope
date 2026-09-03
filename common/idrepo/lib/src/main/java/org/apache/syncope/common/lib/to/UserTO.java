@@ -34,13 +34,9 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
 
     private static final long serialVersionUID = 7791304495192615740L;
 
-    private String password;
-
-    private String token;
-
-    private OffsetDateTime tokenExpireTime;
-
     private String username;
+
+    private String password;
 
     private OffsetDateTime lastLoginDate;
 
@@ -50,19 +46,13 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
 
     private String securityQuestion;
 
-    private String securityAnswer;
-
     private boolean suspended;
 
     private boolean mustChangePassword;
 
     private final List<MembershipTO> memberships = new ArrayList<>();
 
-    private final List<MembershipTO> dynMemberships = new ArrayList<>();
-
     private final List<String> roles = new ArrayList<>();
-
-    private final List<String> dynRoles = new ArrayList<>();
 
     private final List<LinkedAccountTO> linkedAccounts = new ArrayList<>();
 
@@ -88,30 +78,6 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
         // fixed
     }
 
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(final String password) {
-        this.password = password;
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public void setToken(final String token) {
-        this.token = token;
-    }
-
-    public OffsetDateTime getTokenExpireTime() {
-        return tokenExpireTime;
-    }
-
-    public void setTokenExpireTime(final OffsetDateTime tokenExpireTime) {
-        this.tokenExpireTime = tokenExpireTime;
-    }
-
     @JsonProperty(required = true)
     public String getUsername() {
         return username;
@@ -119,6 +85,14 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
 
     public void setUsername(final String username) {
         this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(final String password) {
+        this.password = password;
     }
 
     public OffsetDateTime getChangePwdDate() {
@@ -153,14 +127,6 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
         this.securityQuestion = securityQuestion;
     }
 
-    public String getSecurityAnswer() {
-        return securityAnswer;
-    }
-
-    public void setSecurityAnswer(final String securityAnswer) {
-        this.securityAnswer = securityAnswer;
-    }
-
     public boolean isSuspended() {
         return suspended;
     }
@@ -188,17 +154,8 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
         return memberships;
     }
 
-    @Override
-    public List<MembershipTO> getDynMemberships() {
-        return dynMemberships;
-    }
-
     public List<String> getRoles() {
         return roles;
-    }
-
-    public List<String> getDynRoles() {
-        return dynRoles;
     }
 
     public List<LinkedAccountTO> getLinkedAccounts() {
@@ -221,18 +178,13 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
                 appendSuper(super.hashCode()).
                 append(username).
                 append(roles).
-                append(dynRoles).
-                append(token).
-                append(tokenExpireTime).
                 append(lastLoginDate).
                 append(changePwdDate).
                 append(failedLogins).
                 append(securityQuestion).
-                append(securityAnswer).
                 append(suspended).
                 append(mustChangePassword).
                 append(memberships).
-                append(dynMemberships).
                 append(linkedAccounts).
                 append(delegatingDelegations).
                 append(delegatedDelegations).
@@ -255,18 +207,13 @@ public class UserTO extends AnyTO implements GroupableRelatableTO {
                 appendSuper(super.equals(obj)).
                 append(username, other.username).
                 append(roles, other.roles).
-                append(dynRoles, other.dynRoles).
-                append(token, other.token).
-                append(tokenExpireTime, other.tokenExpireTime).
                 append(lastLoginDate, other.lastLoginDate).
                 append(changePwdDate, other.changePwdDate).
                 append(failedLogins, other.failedLogins).
                 append(securityQuestion, other.securityQuestion).
-                append(securityAnswer, other.securityAnswer).
                 append(suspended, other.suspended).
                 append(mustChangePassword, other.mustChangePassword).
                 append(memberships, other.memberships).
-                append(dynMemberships, other.dynMemberships).
                 append(linkedAccounts, other.linkedAccounts).
                 append(delegatingDelegations, other.delegatingDelegations).
                 append(delegatedDelegations, other.delegatedDelegations).

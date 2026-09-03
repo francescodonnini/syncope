@@ -419,7 +419,7 @@ under the License.
                       <time>30000</time>
                     </wait>
                     <tmpfs>
-                      <mount>/var/lib/postgresql/data:rw</mount>
+                      <mount>/var/lib/postgresql/docker:rw</mount>
                     </tmpfs>
                     <network>
                       <name>archetype</name>
@@ -439,6 +439,8 @@ under the License.
                     <env>
                       <JAVA_OPTS>-Dfile.encoding=UTF-8 -server -Xms1536m -Xmx1536m
                         -XX:NewSize=256m -XX:MaxNewSize=256m -XX:+DisableExplicitGC
+                        -Dsyncope.conf.dir=/opt/syncope/conf
+                        -Dsyncope.connid.location=file:/opt/syncope/bundles
                         -Djava.security.egd=file:/dev/./urandom
                         -Djavax.net.ssl.trustStore=/opt/syncope/conf/keystore.p12
                         -Djavax.net.ssl.trustStorePassword=password</JAVA_OPTS>
@@ -448,7 +450,6 @@ under the License.
                       <DB_PASSWORD>syncope</DB_PASSWORD>
                       <DB_POOL_MAX>20</DB_POOL_MAX>
                       <DB_POOL_MIN>5</DB_POOL_MIN>
-                      <OPENJPA_REMOTE_COMMIT>sjvm</OPENJPA_REMOTE_COMMIT>
                       <SERVICE_DISCOVERY_ADDRESS>http://syncope:8080/syncope/rest/</SERVICE_DISCOVERY_ADDRESS>
                       <KEYMASTER_ADDRESS>http://syncope:8080/syncope/rest/keymaster</KEYMASTER_ADDRESS>
                       <KEYMASTER_USERNAME>${anonymousUser}</KEYMASTER_USERNAME>

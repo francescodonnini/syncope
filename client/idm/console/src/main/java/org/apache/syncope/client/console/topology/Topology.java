@@ -46,6 +46,8 @@ import org.apache.syncope.client.console.wicket.markup.html.form.ActionsPanel;
 import org.apache.syncope.client.console.wizards.resources.AbstractResourceWizardBuilder.CreateEvent;
 import org.apache.syncope.client.ui.commons.Constants;
 import org.apache.syncope.client.ui.commons.annotations.IdMPage;
+import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.ServiceOps;
 import org.apache.syncope.common.lib.to.ConnInstanceTO;
 import org.apache.syncope.common.lib.to.ResourceTO;
 import org.apache.syncope.common.lib.types.IdMEntitlement;
@@ -70,6 +72,12 @@ public class Topology extends BasePage {
     private static final long serialVersionUID = -1100228004207271272L;
 
     public static final String CONNECTOR_SERVER_LOCATION_PREFIX = "connid://";
+
+    @SpringBean
+    protected ServiceOps serviceOps;
+
+    @SpringBean
+    protected ConfParamOps confParamOps;
 
     @SpringBean
     protected ResourceRestClient resourceRestClient;
@@ -133,7 +141,7 @@ public class Topology extends BasePage {
             final List<URI> connectorServers = new ArrayList<>();
             final List<URI> filePaths = new ArrayList<>();
 
-            SyncopeConsoleSession.get().getPlatformInfo().getConnIdLocations().forEach(location -> {
+            SyncopeConsoleSession.get().getPlatformInfo().connIdLocations().forEach(location -> {
                 if (location.startsWith(CONNECTOR_SERVER_LOCATION_PREFIX)) {
                     connectorServers.add(URI.create(location));
                 } else {
@@ -158,8 +166,9 @@ public class Topology extends BasePage {
         body.add(modal.size(Modal.Size.Large));
         modal.setWindowClosedCallback(target -> modal.show(false));
 
-        TopologyWebSocketBehavior websocket = new TopologyWebSocketBehavior();
-        body.add(websocket);
+        TopologyWebSocketBehavior websocket = new TopologyWebSocketBehavior(
+                serviceOps, confParamOps, connectorRestClient, resourceRestClient);
+        webSocketBehavior.add(websocket);
 
         togglePanel = new TopologyTogglePanel("toggle", getPageReference());
         body.add(togglePanel);
@@ -187,6 +196,26 @@ public class Topology extends BasePage {
                 target.appendJavaScript("zoomOut($('#drawing')[0]);");
             }
         }, ActionLink.ActionType.ZOOM_OUT, IdMEntitlement.CONNECTOR_LIST).disableIndicator().hideLabel();
+
+        zoomActionPanel.add(new ActionLink<>() {
+
+            private static final long serialVersionUID = -3722207913631435501L;
+
+            @Override
+            public void onClick(final AjaxRequestTarget target, final Serializable ignore) {
+                target.appendJavaScript("autoLayoutTree({ centerInView: false });");
+            }
+        }, ActionLink.ActionType.AUTO_LAYOUT, IdMEntitlement.CONNECTOR_LIST).disableIndicator().hideLabel();
+
+        zoomActionPanel.add(new ActionLink<>() {
+
+            private static final long serialVersionUID = -3722207913631435501L;
+
+            @Override
+            public void onClick(final AjaxRequestTarget target, final Serializable ignore) {
+                target.appendJavaScript("recenterToTree();");
+            }
+        }, ActionLink.ActionType.RECENTER, IdMEntitlement.CONNECTOR_LIST).disableIndicator().hideLabel();
 
         body.add(zoomActionPanel);
         // -----------------------------------------
@@ -455,6 +484,10 @@ public class Topology extends BasePage {
                 jsPlumbConf.append(String.format(Locale.US, "activate(%.2f);", 0.68f));
 
                 createConnections(connections).forEach(jsPlumbConf::append);
+                // Apply the tree layout on first load (when no saved node positions exist yet).
+                jsPlumbConf.append("var __topo=getTopology();var __hasPos=false;"
+                        + "for(var __k in __topo){if(__k!=='__zoom__'){__hasPos=true;break;}}"
+                        + "if(!__hasPos){autoLayoutTree({ centerInView: false });}");
 
                 response.render(OnDomReadyHeaderItem.forScript(jsPlumbConf.toString()));
             }
@@ -512,7 +545,7 @@ public class Topology extends BasePage {
         List<String> list = new ArrayList<>();
 
         targets.forEach((key, value) -> value.forEach((label, node) -> list.add(
-                String.format("connect('%s','%s','%s');", key, label, node.getKind()))));
+                "connect('%s','%s','%s');".formatted(key, label, node.getKind()))));
 
         return list;
     }
@@ -530,8 +563,8 @@ public class Topology extends BasePage {
 
             @Override
             public void renderHead(final Component component, final IHeaderResponse response) {
-                response.render(OnDomReadyHeaderItem.forScript(String.format("setPosition('%s', %d, %d)",
-                        node.getKey(), node.getX(), node.getY())));
+                response.render(OnDomReadyHeaderItem.forScript("setPosition('%s', %d, %d)".
+                        formatted(node.getKey(), node.getX(), node.getY())));
             }
         });
 
@@ -547,10 +580,10 @@ public class Topology extends BasePage {
             @Override
             protected void onEvent(final AjaxRequestTarget target) {
                 togglePanel.toggleWithContent(target, node);
-                target.appendJavaScript(String.format(
+                target.appendJavaScript(
                         "$('.window').removeClass(\"active-window\").addClass(\"inactive-window\"); "
                         + "$(document.getElementById('%s'))."
-                        + "removeClass(\"inactive-window\").addClass(\"active-window\");", node.getKey()));
+                        + "removeClass(\"inactive-window\").addClass(\"active-window\");".formatted(node.getKey()));
             }
         });
 
@@ -572,14 +605,13 @@ public class Topology extends BasePage {
             newlyCreated.getModelObject().add(node);
             payload.getTarget().add(newlyCreatedContainer);
 
-            payload.getTarget().appendJavaScript(String.format(
+            payload.getTarget().appendJavaScript(
                     "window.Wicket.WebSocket.send('"
-                    + "{\"kind\":\"%s\",\"target\":\"%s\",\"source\":\"%s\",\"scope\":\"%s\"}"
-                    + "');",
-                    SupportedOperation.ADD_ENDPOINT,
-                    payload.getKey(),
-                    payload.getParent(),
-                    payload.getKind()));
+                    + "{\"kind\":\"%s\",\"target\":\"%s\",\"source\":\"%s\",\"scope\":\"%s\"}');".formatted(
+                            SupportedOperation.ADD_ENDPOINT,
+                            payload.getKey(),
+                            payload.getParent(),
+                            payload.getKind()));
         }
     }
 }

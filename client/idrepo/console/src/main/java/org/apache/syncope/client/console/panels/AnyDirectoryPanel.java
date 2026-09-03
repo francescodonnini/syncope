@@ -41,7 +41,6 @@ import org.apache.syncope.client.console.wicket.extensions.markup.html.repeater.
 import org.apache.syncope.client.console.wicket.extensions.markup.html.repeater.data.table.BooleanPropertyColumn;
 import org.apache.syncope.client.console.wicket.extensions.markup.html.repeater.data.table.DatePropertyColumn;
 import org.apache.syncope.client.console.wicket.extensions.markup.html.repeater.data.table.KeyPropertyColumn;
-import org.apache.syncope.client.console.wicket.extensions.markup.html.repeater.data.table.TokenColumn;
 import org.apache.syncope.client.console.wicket.markup.html.bootstrap.dialog.BaseModal;
 import org.apache.syncope.client.console.wicket.markup.html.form.ActionLink;
 import org.apache.syncope.client.console.wizards.any.StatusPanel;
@@ -107,17 +106,13 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
 
     protected AnyDirectoryPanel(final String id, final Builder<A, E> builder, final boolean wizardInModal) {
         super(id, builder, wizardInModal);
-        if (SyncopeConsoleSession.get().owns(String.format("%s_CREATE", builder.type), builder.realm)
+        if (SyncopeConsoleSession.get().owns("%s_CREATE".formatted(builder.type), builder.realm)
                 && builder.realm.startsWith(SyncopeConstants.ROOT_REALM)) {
             MetaDataRoleAuthorizationStrategy.authorizeAll(addAjaxLink, RENDER);
         } else {
             MetaDataRoleAuthorizationStrategy.unauthorizeAll(addAjaxLink, RENDER);
         }
-        if (builder.dynRealm == null) {
-            setReadOnly(!SyncopeConsoleSession.get().owns(String.format("%s_UPDATE", builder.type), builder.realm));
-        } else {
-            setReadOnly(!SyncopeConsoleSession.get().owns(String.format("%s_UPDATE", builder.type), builder.dynRealm));
-        }
+        setReadOnly(!SyncopeConsoleSession.get().owns("%s_UPDATE".formatted(builder.type), builder.realm));
 
         realm = builder.realm;
         type = builder.type;
@@ -180,20 +175,20 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
                 new ResourceModel(Constants.KEY_FIELD_NAME, Constants.KEY_FIELD_NAME), Constants.KEY_FIELD_NAME));
 
         List<IColumn<A, String>> prefcolumns = new ArrayList<>();
-        PreferenceManager.getList(DisplayAttributesModalPanel.getPrefDetailView(type)).stream().
+        PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefDetailView(type)).stream().
                 filter(name -> !Constants.KEY_FIELD_NAME.equalsIgnoreCase(name)).
                 forEach(name -> addPropertyColumn(
                 name,
-                ReflectionUtils.findField(DisplayAttributesModalPanel.getTOClass(type), name),
+                ReflectionUtils.findField(AnyDisplayAttributesModalPanel.getTOClass(type), name),
                 prefcolumns));
 
-        PreferenceManager.getList(DisplayAttributesModalPanel.getPrefPlainAttributeView(type)).stream().
+        PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefPlainAttributeView(type)).stream().
                 map(a -> plainSchemas.stream().filter(p -> p.getKey().equals(a)).findFirst()).
                 flatMap(Optional::stream).
                 forEach(s -> prefcolumns.add(new AttrColumn<>(
                 s.getKey(), s.getLabel(SyncopeConsoleSession.get().getLocale()), SchemaType.PLAIN)));
 
-        PreferenceManager.getList(DisplayAttributesModalPanel.getPrefDerivedAttributeView(type)).stream().
+        PreferenceManager.getList(AnyDisplayAttributesModalPanel.getPrefDerivedAttributeView(type)).stream().
                 map(a -> derSchemas.stream().filter(p -> p.getKey().equals(a)).findFirst()).
                 flatMap(Optional::stream).
                 forEach(s -> prefcolumns.add(new AttrColumn<>(
@@ -204,12 +199,12 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
             for (String name : getDefaultAttributeSelection()) {
                 addPropertyColumn(
                         name,
-                        ReflectionUtils.findField(DisplayAttributesModalPanel.getTOClass(type), name),
+                        ReflectionUtils.findField(AnyDisplayAttributesModalPanel.getTOClass(type), name),
                         prefcolumns);
             }
 
-            PreferenceManager.setList(
-                    DisplayAttributesModalPanel.getPrefDetailView(type),
+            PreferenceManager.set(
+                    AnyDisplayAttributesModalPanel.getPrefDetailView(type),
                     List.of(getDefaultAttributeSelection()));
         }
 
@@ -226,8 +221,6 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
 
         if (Constants.KEY_FIELD_NAME.equalsIgnoreCase(name)) {
             columns.add(new KeyPropertyColumn<>(new ResourceModel(name, name), name, name));
-        } else if (Constants.DEFAULT_TOKEN_FIELD_NAME.equalsIgnoreCase(name)) {
-            columns.add(new TokenColumn<>(new ResourceModel(name, name), name));
         } else if (field != null && !field.isSynthetic()
                 && (field.getType().equals(Boolean.class) || field.getType().equals(boolean.class))) {
 
@@ -280,8 +273,6 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
          */
         protected String realm = SyncopeConstants.ROOT_REALM;
 
-        protected String dynRealm = null;
-
         /**
          * Any type related to current panel.
          */
@@ -302,11 +293,6 @@ public abstract class AnyDirectoryPanel<A extends AnyTO, E extends AbstractAnyRe
 
         public Builder<A, E> setRealm(final String realm) {
             this.realm = realm;
-            return this;
-        }
-
-        public Builder<A, E> setDynRealm(final String dynRealm) {
-            this.dynRealm = dynRealm;
             return this;
         }
 

@@ -19,14 +19,11 @@
 package org.apache.syncope.common.lib;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.SerializationUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.syncope.common.lib.request.AbstractReplacePatchItem;
 import org.apache.syncope.common.lib.request.AnyObjectUR;
@@ -60,8 +57,6 @@ import org.slf4j.LoggerFactory;
 public final class AnyOperations {
 
     private static final Logger LOG = LoggerFactory.getLogger(AnyOperations.class);
-
-    private static final List<String> NULL_SINGLETON_LIST = Collections.singletonList(null);
 
     private AnyOperations() {
         // empty constructor for static utility classes
@@ -127,7 +122,34 @@ public final class AnyOperations {
         // 1. realm
         result.setRealm(replacePatchItem(updated.getRealm(), original.getRealm(), new StringReplacePatchItem()));
 
-        // 2. auxiliary classes
+        // 2. manager
+        if (updated.getUManager() != null || original.getUManager() != null) {
+            StringReplacePatchItem uManager = new StringReplacePatchItem();
+            if (updated.getUManager() == null) {
+                if (!incremental) {
+                    uManager.setOperation(PatchOperation.DELETE);
+                    result.setUManager(uManager);
+                }
+            } else if (!updated.getUManager().equals(original.getUManager())) {
+                uManager.setValue(updated.getUManager());
+                result.setUManager(uManager);
+            }
+        }
+
+        if (updated.getGManager() != null || original.getGManager() != null) {
+            StringReplacePatchItem gManager = new StringReplacePatchItem();
+            if (updated.getGManager() == null) {
+                if (!incremental) {
+                    gManager.setOperation(PatchOperation.DELETE);
+                    result.setGManager(gManager);
+                }
+            } else if (!updated.getGManager().equals(original.getGManager())) {
+                gManager.setValue(updated.getGManager());
+                result.setGManager(gManager);
+            }
+        }
+
+        // 3. auxiliary classes
         result.getAuxClasses().clear();
 
         if (!incremental) {
@@ -140,10 +162,10 @@ public final class AnyOperations {
                 forEach(auxClass -> result.getAuxClasses().add(new StringPatchItem.Builder().
                 operation(PatchOperation.ADD_REPLACE).value(auxClass).build()));
 
-        // 3. relationships
+        // 4. relationships
         relationships(updated, original, incremental, result.getRelationships());
 
-        // 4. plain attributes
+        // 5. plain attributes
         Map<String, Attr> updatedAttrs = EntityTOUtils.buildAttrMap(updated.getPlainAttrs());
         Map<String, Attr> originalAttrs = EntityTOUtils.buildAttrMap(original.getPlainAttrs());
 
@@ -176,7 +198,7 @@ public final class AnyOperations {
             }
         });
 
-        // 4. resources
+        // 6. resources
         result.getResources().clear();
 
         if (!incremental) {
@@ -273,13 +295,9 @@ public final class AnyOperations {
         if (updated.getSecurityQuestion() == null) {
             result.setSecurityQuestion(null);
             result.setSecurityAnswer(null);
-        } else if (!updated.getSecurityQuestion().equals(original.getSecurityQuestion())
-                || StringUtils.isNotBlank(updated.getSecurityAnswer())) {
-
+        } else if (!updated.getSecurityQuestion().equals(original.getSecurityQuestion())) {
             result.setSecurityQuestion(new StringReplacePatchItem.Builder().
                     value(updated.getSecurityQuestion()).build());
-            result.setSecurityAnswer(
-                    new StringReplacePatchItem.Builder().value(updated.getSecurityAnswer()).build());
         }
 
         result.setMustChangePassword(replacePatchItem(
@@ -335,17 +353,7 @@ public final class AnyOperations {
         // 1. name
         result.setName(replacePatchItem(updated.getName(), original.getName(), new StringReplacePatchItem()));
 
-        // 2. ownership
-        result.setUserOwner(
-                replacePatchItem(updated.getUserOwner(), original.getUserOwner(), new StringReplacePatchItem()));
-        result.setGroupOwner(
-                replacePatchItem(updated.getGroupOwner(), original.getGroupOwner(), new StringReplacePatchItem()));
-
-        // 3. dynamic membership
-        result.setUDynMembershipCond(updated.getUDynMembershipCond());
-        result.getADynMembershipConds().putAll(updated.getADynMembershipConds());
-
-        // 4. type extensions
+        // 2. type extensions
         result.getTypeExtensions().addAll(updated.getTypeExtensions());
 
         return result;
@@ -397,7 +405,15 @@ public final class AnyOperations {
             result.setRealm(req.getRealm().getValue());
         }
 
-        // 1. auxiliary classes
+        // 1. manager
+        if (req.getUManager() != null) {
+            result.setUManager(req.getUManager().getValue());
+        }
+        if (req.getGManager() != null) {
+            result.setGManager(req.getGManager().getValue());
+        }
+
+        // 2. auxiliary classes
         for (StringPatchItem auxClassPatch : req.getAuxClasses()) {
             switch (auxClassPatch.getOperation()) {
                 case ADD_REPLACE:
@@ -410,11 +426,11 @@ public final class AnyOperations {
             }
         }
 
-        // 2. plain attributes
+        // 3. plain attributes
         result.getPlainAttrs().clear();
         result.getPlainAttrs().addAll(patch(EntityTOUtils.buildAttrMap(to.getPlainAttrs()), req.getPlainAttrs()));
 
-        // 3. resources
+        // 4. resources
         for (StringPatchItem resourcePatch : req.getResources()) {
             switch (resourcePatch.getOperation()) {
                 case ADD_REPLACE:
@@ -470,17 +486,6 @@ public final class AnyOperations {
         if (groupUR.getName() != null) {
             result.setName(groupUR.getName().getValue());
         }
-
-        if (groupUR.getUserOwner() != null) {
-            result.setGroupOwner(groupUR.getUserOwner().getValue());
-        }
-        if (groupUR.getGroupOwner() != null) {
-            result.setGroupOwner(groupUR.getGroupOwner().getValue());
-        }
-
-        result.setUDynMembershipCond(groupUR.getUDynMembershipCond());
-        result.getADynMembershipConds().clear();
-        result.getADynMembershipConds().putAll(groupUR.getADynMembershipConds());
 
         relationships(groupUR.getRelationships(), result);
 
@@ -588,6 +593,6 @@ public final class AnyOperations {
     }
 
     private static boolean isEmpty(final Attr attr) {
-        return attr.getValues().isEmpty() || NULL_SINGLETON_LIST.equals(attr.getValues());
+        return attr.getValues().isEmpty() || attr.getValues().stream().allMatch(e -> e == null);
     }
 }

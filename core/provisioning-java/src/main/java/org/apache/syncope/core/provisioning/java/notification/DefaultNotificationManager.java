@@ -33,7 +33,6 @@ import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
-import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.to.AnyObjectTO;
 import org.apache.syncope.common.lib.to.GroupTO;
 import org.apache.syncope.common.lib.to.ProvisioningResult;
@@ -65,8 +64,8 @@ import org.apache.syncope.core.persistence.api.entity.task.TaskExec;
 import org.apache.syncope.core.persistence.api.entity.user.UMembership;
 import org.apache.syncope.core.persistence.api.entity.user.URelationship;
 import org.apache.syncope.core.persistence.api.entity.user.User;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
 import org.apache.syncope.core.persistence.api.search.SearchCondConverter;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
 import org.apache.syncope.core.provisioning.api.DerAttrHandler;
 import org.apache.syncope.core.provisioning.api.IntAttrName;
 import org.apache.syncope.core.provisioning.api.IntAttrNameParser;
@@ -81,6 +80,7 @@ import org.apache.syncope.core.spring.implementation.ImplementationManager;
 import org.apache.syncope.core.spring.security.AuthContextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Transactional(rollbackFor = { Throwable.class })
@@ -120,7 +120,7 @@ public class DefaultNotificationManager implements NotificationManager {
 
     protected final IntAttrNameParser intAttrNameParser;
 
-    protected final SearchCondVisitor searchCondVisitor;
+    protected final AnySearchCondVisitor searchCondVisitor;
 
     protected final JexlTools jexlTools;
 
@@ -143,7 +143,7 @@ public class DefaultNotificationManager implements NotificationManager {
             final ConfParamOps confParamOps,
             final EntityFactory entityFactory,
             final IntAttrNameParser intAttrNameParser,
-            final SearchCondVisitor searchCondVisitor,
+            final AnySearchCondVisitor searchCondVisitor,
             final JexlTools jexlTools) {
 
         this.derSchemaDAO = derSchemaDAO;
@@ -166,12 +166,6 @@ public class DefaultNotificationManager implements NotificationManager {
         this.jexlTools = jexlTools;
     }
 
-    @Transactional(readOnly = true)
-    @Override
-    public long getMaxRetries() {
-        return confParamOps.get(SyncopeConstants.MASTER_DOMAIN, "notification.maxRetries", 0L, Long.class);
-    }
-
     /**
      * Create a notification task.
      *
@@ -185,7 +179,7 @@ public class DefaultNotificationManager implements NotificationManager {
             final Any any,
             final Map<String, Object> jexlVars) {
 
-        jexlVars.put("syncopeConf", confParamOps.list(SyncopeConstants.MASTER_DOMAIN));
+        jexlVars.put("syncopeConf", confParamOps.list(AuthContextUtils.getDomain()));
         jexlVars.put("events", notification.getEvents());
 
         List<User> recipients = new ArrayList<>();
@@ -248,6 +242,7 @@ public class DefaultNotificationManager implements NotificationManager {
         return task;
     }
 
+    @Transactional(readOnly = true)
     @Override
     public boolean notificationsAvailable(
             final String domain,
@@ -292,7 +287,9 @@ public class DefaultNotificationManager implements NotificationManager {
 
         Optional<? extends Any> any = Optional.empty();
 
-        if (before instanceof UserTO userTO) {
+        if (before instanceof Any a) {
+            any = Optional.of(a);
+        } else if (before instanceof UserTO userTO) {
             any = userDAO.findById(userTO.getKey());
         } else if (output instanceof UserTO userTO) {
             any = userDAO.findById(userTO.getKey());
@@ -347,18 +344,31 @@ public class DefaultNotificationManager implements NotificationManager {
                     jexlVars.put("output", output);
                     jexlVars.put("input", input);
 
-                    any.ifPresent(a -> {
-                        switch (a) {
-                            case User user ->
-                                jexlVars.put("user", userDataBinder.getUserTO(user, true));
-                            case Group group ->
-                                jexlVars.put("group", groupDataBinder.getGroupTO(group, true));
-                            case AnyObject anyObject ->
-                                jexlVars.put("anyObject", anyObjectDataBinder.getAnyObjectTO(anyObject, true));
-                            default -> {
-                            }
-                        }
-                    });
+                    any.ifPresentOrElse(
+                            a -> {
+                                switch (a) {
+                                    case User user ->
+                                        jexlVars.put("user", userDataBinder.getUserTO(user, true));
+                                    case Group group ->
+                                        jexlVars.put("group", groupDataBinder.getGroupTO(group, true));
+                                    case AnyObject anyObject ->
+                                        jexlVars.put("anyObject", anyObjectDataBinder.getAnyObjectTO(anyObject, true));
+                                    default -> {
+                                    }
+                                }
+                            },
+                            () -> {
+                                switch (before) {
+                                    case UserTO userTO ->
+                                        jexlVars.put("user", userTO);
+                                    case GroupTO groupTO ->
+                                        jexlVars.put("group", groupTO);
+                                    case AnyObjectTO anyObjectTO ->
+                                        jexlVars.put("anyObject", anyObjectTO);
+                                    case null, default -> {
+                                    }
+                                }
+                            });
 
                     NotificationTask notificationTask = getNotificationTask(notification, any.orElse(null), jexlVars);
                     notificationTask = taskDAO.save(notificationTask);
@@ -429,17 +439,22 @@ public class DefaultNotificationManager implements NotificationManager {
         return email;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
-    public TaskExec<NotificationTask> storeExec(final TaskExec<NotificationTask> execution) {
-        NotificationTask task = taskDAO.findById(TaskType.NOTIFICATION, execution.getTask().getKey()).
+    public TaskExec<NotificationTask> storeExec(final String taskKey, final TaskExec<NotificationTask> execution) {
+        NotificationTask task = taskDAO.findById(TaskType.NOTIFICATION, taskKey).
                 map(NotificationTask.class::cast).
                 orElseThrow(() -> new NotFoundException("NotificationTask " + execution.getTask().getKey()));
+        execution.setTask(task);
         task.add(execution);
         task.setExecuted(true);
         taskDAO.save(task);
+
+        execution.setTask(null);
         return execution;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
     public void setTaskExecuted(final String taskKey, final boolean executed) {
         NotificationTask task = taskDAO.findById(TaskType.NOTIFICATION, taskKey).

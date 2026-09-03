@@ -33,6 +33,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+import org.apache.commons.lang3.mutable.Mutable;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.cxf.jaxrs.client.WebClient;
 import org.apache.http.Consts;
 import org.apache.http.HttpHeaders;
@@ -49,10 +52,11 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.apache.syncope.client.ui.commons.panels.OIDCC4UIConstants;
-import org.apache.syncope.common.lib.OIDCScopeConstants;
+import org.apache.syncope.common.lib.OIDCStandardScope;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.to.Item;
 import org.apache.syncope.common.lib.to.OIDCC4UIProviderTO;
+import org.apache.syncope.common.lib.to.OIDCOpEntityTO;
 import org.apache.syncope.common.lib.to.OIDCRPClientAppTO;
 import org.apache.syncope.common.lib.to.UserTO;
 import org.apache.syncope.common.lib.types.ClientAppType;
@@ -66,7 +70,28 @@ import org.junit.jupiter.api.BeforeAll;
 
 public class OIDCC4UIITCase extends AbstractUIITCase {
 
+    private static final String ITCASE_SCOPE = "itcase";
+
+    private static void oidcOpEntitySetup() {
+        OIDCOpEntityTO oidcOpEntity;
+        try {
+            oidcOpEntity = OIDC_OP_ENTITY_SERVICE.get();
+        } catch (Exception e) {
+            Response response = OIDC_OP_ENTITY_SERVICE.generate("syncope", "RSA", 2048);
+            assertEquals(Response.Status.CREATED.getStatusCode(), response.getStatus());
+
+            oidcOpEntity = OIDC_OP_ENTITY_SERVICE.get();
+        }
+
+        if (!oidcOpEntity.getCustomScopes().containsKey(ITCASE_SCOPE)) {
+            oidcOpEntity.getCustomScopes().put(ITCASE_SCOPE, Set.of("identifier"));
+            OIDC_OP_ENTITY_SERVICE.set(oidcOpEntity);
+        }
+    }
+
     private static void clientAppSetup(final String appName, final String baseAddress, final long appId) {
+        oidcOpEntitySetup();
+
         OIDCRPClientAppTO clientApp = CLIENT_APP_SERVICE.list(ClientAppType.OIDCRP).stream().
                 filter(app -> appName.equals(app.getName())).
                 map(OIDCRPClientAppTO.class::cast).
@@ -102,9 +127,10 @@ public class OIDCC4UIITCase extends AbstractUIITCase {
                 Set.of(OIDCResponseType.CODE, OIDCResponseType.ID_TOKEN_TOKEN, OIDCResponseType.TOKEN));
         clientApp.setAuthPolicy(getAuthPolicy().getKey());
         clientApp.setAttrReleasePolicy(getAttrReleasePolicy().getKey());
-        clientApp.getScopes().add(OIDCScopeConstants.OPEN_ID);
-        clientApp.getScopes().add(OIDCScopeConstants.PROFILE);
-        clientApp.getScopes().add(OIDCScopeConstants.EMAIL);
+        clientApp.getScopes().add(OIDCStandardScope.openid.name());
+        clientApp.getScopes().add(OIDCStandardScope.profile.name());
+        clientApp.getScopes().add(OIDCStandardScope.email.name());
+        clientApp.getScopes().add(ITCASE_SCOPE);
 
         CLIENT_APP_SERVICE.update(ClientAppType.OIDCRP, clientApp);
 
@@ -113,7 +139,7 @@ public class OIDCC4UIITCase extends AbstractUIITCase {
                 String metadata = WebClient.create(
                         WA_ADDRESS + "/actuator/env", ANONYMOUS_USER, ANONYMOUS_KEY, null).
                         get().readEntity(String.class);
-                if (!metadata.contains("cas.authn.oidc.core.user-defined-scopes.syncope")) {
+                if (!metadata.contains("cas.authn.oidc.core.user-defined-scopes." + ITCASE_SCOPE)) {
                     WA_CONFIG_SERVICE.pushToWA(WAConfigService.PushSubject.conf, List.of());
                     throw new IllegalStateException();
                 }
@@ -160,8 +186,8 @@ public class OIDCC4UIITCase extends AbstractUIITCase {
             cas.setIssuer(WA_ADDRESS + "/oidc");
             cas.setHasDiscovery(true);
 
-            cas.getScopes().addAll(OIDCScopeConstants.ALL_STANDARD_SCOPES);
-            cas.getScopes().add("syncope");
+            Stream.of(OIDCStandardScope.values()).map(OIDCStandardScope::name).forEach(cas.getScopes()::add);
+            cas.getScopes().add(ITCASE_SCOPE);
 
             cas.setCreateUnmatching(createUnmatching);
             cas.setSelfRegUnmatching(selfRegUnmatching);
@@ -211,221 +237,218 @@ public class OIDCC4UIITCase extends AbstractUIITCase {
         oidcSetup(getAppName(ENDUSER_ADDRESS), false, true);
     }
 
-    @Override
-    protected void sso(final String baseURL, final String username, final String password) throws IOException {
-        CloseableHttpClient httpclient = HttpClients.createDefault();
-        HttpClientContext context = HttpClientContext.create();
-        context.setCookieStore(new BasicCookieStore());
+    private void loginlogout(
+            final CloseableHttpClient httpclient,
+            final HttpClientContext context,
+            final String baseURL,
+            final String loginPageBody,
+            final String username,
+            final String password) throws IOException {
 
-        // 1. fetch login page
-        HttpGet get = new HttpGet(baseURL);
-        CloseableHttpResponse response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        // 1. redirected to WA login screen
+        Mutable<String> location = new MutableObject<>();
+        try (CloseableHttpResponse response =
+                authenticateToWA(username, password, loginPageBody, httpclient, context)) {
 
-        // 2. click on the OpenID Connect Provider
-        get = new HttpGet(baseURL + OIDCC4UIConstants.URL_CONTEXT + "/login?op=" + getAppName(baseURL));
-        get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            // 2a. WA attribute consent screen
+            switch (response.getStatusLine().getStatusCode()) {
+                case HttpStatus.SC_OK -> {
+                    String responseBody = EntityUtils.toString(response.getEntity());
 
-        // 2a. redirected to WA login screen
-        String responseBody = EntityUtils.toString(response.getEntity());
-        response = authenticateToWA(username, password, responseBody, httpclient, context);
+                    // check attribute repository
+                    assertTrue(responseBody.contains("identifier"));
+                    assertTrue(responseBody.contains("[value1]"));
 
-        // 2b. WA attribute consent screen
-        if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
-            responseBody = EntityUtils.toString(response.getEntity());
+                    String execution = extractWAExecution(responseBody);
 
-            // check attribute repository
-            assertTrue(responseBody.contains("identifier"));
-            assertTrue(responseBody.contains("[value1]"));
+                    List<NameValuePair> form = new ArrayList<>();
+                    form.add(new BasicNameValuePair("_eventId", "confirm"));
+                    form.add(new BasicNameValuePair("execution", execution));
+                    form.add(new BasicNameValuePair("option", "1"));
+                    form.add(new BasicNameValuePair("reminder", "30"));
+                    form.add(new BasicNameValuePair("reminderTimeUnit", "days"));
 
-            String execution = extractWAExecution(responseBody);
+                    HttpPost post = new HttpPost(WA_ADDRESS + "/login");
+                    post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
+                    post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
+                    post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
+                    try (CloseableHttpResponse r = httpclient.execute(post, context)) {
+                        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, r.getStatusLine().getStatusCode());
 
-            List<NameValuePair> form = new ArrayList<>();
-            form.add(new BasicNameValuePair("_eventId", "confirm"));
-            form.add(new BasicNameValuePair("execution", execution));
-            form.add(new BasicNameValuePair("option", "1"));
-            form.add(new BasicNameValuePair("reminder", "30"));
-            form.add(new BasicNameValuePair("reminderTimeUnit", "days"));
+                        location.setValue(r.getLastHeader(HttpHeaders.LOCATION).getValue());
+                    }
+                }
 
-            HttpPost post = new HttpPost(WA_ADDRESS + "/login");
-            post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-            post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-            post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
-            response = httpclient.execute(post, context);
+                case HttpStatus.SC_MOVED_TEMPORARILY ->
+                    location.setValue(response.getLastHeader(HttpHeaders.LOCATION).getValue());
+
+                default ->
+                    fail("Unexpected HTTP status: " + response.getStatusLine().getStatusCode());
+            }
         }
-        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
+        assertNotNull(location.get());
 
-        // 2c. WA scope consent screen
-        get = new HttpGet(response.getLastHeader(HttpHeaders.LOCATION).getValue());
+        // 2b. WA scope consent screen
+        HttpGet get = new HttpGet(location.get());
         get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
         get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        String allow;
+        try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        responseBody = EntityUtils.toString(response.getEntity());
+            String body = EntityUtils.toString(response.getEntity());
 
-        String allow = Jsoup.parse(responseBody).body().
-                getElementsByTag("a").select("a[name=allow]").first().
-                attr("href");
+            allow = Jsoup.parse(body).body().
+                    getElementsByTag("a").select("a[name=allow]").first().
+                    attr("href");
+        }
         assertNotNull(allow);
 
-        // 2d. finally get requested content
+        // 3. finally get requested content
         get = new HttpGet(allow);
         get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
         get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
+        try (CloseableHttpResponse response = HttpClients.createDefault().execute(get, context)) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        // 3. verify that user is now authenticated
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        assertTrue(EntityUtils.toString(response.getEntity()).contains(username));
+            // 3. verify that user is now authenticated
+            assertTrue(EntityUtils.toString(response.getEntity()).contains(username));
+        }
 
         // 4. logout
         get = new HttpGet(CONSOLE_ADDRESS.equals(baseURL)
                 ? baseURL + "wicket/bookmarkable/org.apache.syncope.client.console.pages.Logout"
                 : baseURL + "wicket/bookmarkable/org.apache.syncope.client.enduser.pages.Logout");
-        httpclient.execute(get, context);
+        try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+            assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        }
     }
 
     @Override
-    protected void passwordManagement(final String baseURL, final String username, final String password)
+    protected void sso(final String baseURL, final String username, final String password) throws IOException {
+        try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
+            HttpClientContext context = HttpClientContext.create();
+            context.setCookieStore(new BasicCookieStore());
+
+            // 1. fetch login page
+            HttpGet get = new HttpGet(baseURL);
+            try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            }
+
+            // 2. click on the OpenID Connect Provider
+            get = new HttpGet(baseURL + OIDCC4UIConstants.URL_CONTEXT + "/login?op=" + getAppName(baseURL));
+            get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
+            get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
+            String loginPageBody;
+            try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+
+                loginPageBody = EntityUtils.toString(response.getEntity());
+            }
+            assertNotNull(loginPageBody);
+
+            // 3. login and logout
+            loginlogout(httpclient, context, baseURL, loginPageBody, username, password);
+        }
+    }
+
+    @Override
+    protected void passwordManagement(
+            final String baseURL,
+            final String username,
+            final String password)
             throws IOException {
-        CloseableHttpClient httpclient = HttpClients.createDefault();
-        HttpClientContext context = HttpClientContext.create();
-        context.setCookieStore(new BasicCookieStore());
 
-        // 1. fetch login page
-        HttpGet get = new HttpGet(baseURL);
-        CloseableHttpResponse response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+        try (CloseableHttpClient httpclient = HttpClients.createDefault()) {
+            HttpClientContext context = HttpClientContext.create();
+            context.setCookieStore(new BasicCookieStore());
 
-        // 2. click on the OpenID Connect Provider
-        get = new HttpGet(baseURL + OIDCC4UIConstants.URL_CONTEXT + "/login?op=" + getAppName(baseURL));
-        get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            // 1. fetch login page
+            HttpGet get = new HttpGet(baseURL);
+            try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            }
 
-        // 2. redirected to WA login screen
-        String responseBody = EntityUtils.toString(response.getEntity());
-        response = authenticateToWA(username, password, responseBody, httpclient, context);
+            // 2. click on the OpenID Connect Provider
+            get = new HttpGet(baseURL + OIDCC4UIConstants.URL_CONTEXT + "/login?op=" + getAppName(baseURL));
+            get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
+            get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
+            String loginPageBody;
+            try (CloseableHttpResponse response = httpclient.execute(get, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatusLine().getStatusCode());
+                loginPageBody = EntityUtils.toString(response.getEntity());
+            }
+            assertNotNull(loginPageBody);
 
-        // 3. redirected to WA reset password screen
-        responseBody = EntityUtils.toString(response.getEntity());
+            // 3. redirected to WA reset password screen
+            String passwordResetBody;
+            try (CloseableHttpResponse response =
+                    authenticateToWA(username, password, loginPageBody, httpclient, context)) {
 
-        // check WA reset password screen
-        assertTrue(responseBody.contains("currentPassword"));
-        assertTrue(responseBody.contains("password"));
-        assertTrue(responseBody.contains("confirmedPassword"));
-        assertTrue(responseBody.contains("execution"));
+                assertEquals(HttpStatus.SC_UNAUTHORIZED, response.getStatusLine().getStatusCode());
 
-        String execution = extractWAExecution(responseBody);
+                passwordResetBody = EntityUtils.toString(response.getEntity());
+            }
+            assertNotNull(passwordResetBody);
 
-        // 3a. change password request
-        List<NameValuePair> form = new ArrayList<>();
-        form.add(new BasicNameValuePair("_eventId", "submit"));
-        form.add(new BasicNameValuePair("execution", execution));
-        form.add(new BasicNameValuePair("currentPassword", password));
-        form.add(new BasicNameValuePair("password", "PasswordChanged123!"));
-        form.add(new BasicNameValuePair("confirmedPassword", "PasswordChanged123!"));
+            // check WA reset password screen
+            assertTrue(passwordResetBody.contains("password"));
+            assertTrue(passwordResetBody.contains("confirmedPassword"));
+            assertTrue(passwordResetBody.contains("execution"));
 
-        HttpPost post = new HttpPost(WA_ADDRESS + "/login");
-        post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
-        response = httpclient.execute(post, context);
+            String execution = extractWAExecution(passwordResetBody);
 
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+            // 3a. change password request
+            String newpassword = "PasswordChanged123!";
+            List<NameValuePair> form = new ArrayList<>();
+            form.add(new BasicNameValuePair("_eventId", "submit"));
+            form.add(new BasicNameValuePair("execution", execution));
+            form.add(new BasicNameValuePair("password", newpassword));
+            form.add(new BasicNameValuePair("confirmedPassword", newpassword));
 
-        UserTO userTO = USER_SERVICE.read("mustChangePassword");
-        assertFalse(userTO.isMustChangePassword());
+            HttpPost post = new HttpPost(WA_ADDRESS + "/login");
+            post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
+            post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
+            post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
+            String passwordResultBody;
+            try (CloseableHttpResponse response = httpclient.execute(post, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        responseBody = EntityUtils.toString(response.getEntity());
+                passwordResultBody = EntityUtils.toString(response.getEntity());
+            }
+            assertNotNull(passwordResultBody);
+            assertTrue(passwordResultBody.contains("execution"));
+            assertTrue(passwordResultBody.contains("_csrf"));
 
-        assertTrue(responseBody.contains("execution"));
-        assertTrue(responseBody.contains("_csrf"));
+            // user was update on Syncope
+            UserTO userTO = USER_SERVICE.read("mustChangePassword");
+            assertFalse(userTO.isMustChangePassword());
 
-        // 4. go to WA login screen
-        execution = extractWAExecution(responseBody);
-        String csrf = extractWACSRF(responseBody);
-        form.clear();
-        form.add(new BasicNameValuePair("_eventId", "proceed"));
-        form.add(new BasicNameValuePair("_csrf", csrf));
-        form.add(new BasicNameValuePair("execution", execution));
+            // 4. go to WA login screen
+            execution = extractWAExecution(passwordResultBody);
+            String csrf = extractWACSRF(passwordResultBody);
+            form.clear();
+            form.add(new BasicNameValuePair("_eventId", "proceed"));
+            form.add(new BasicNameValuePair("_csrf", csrf));
+            form.add(new BasicNameValuePair("execution", execution));
 
-        post = new HttpPost(WA_ADDRESS + "/login");
-        post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
-        response = httpclient.execute(post, context);
+            post = new HttpPost(WA_ADDRESS + "/login");
+            post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
+            post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
+            post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
+            try (CloseableHttpResponse response = httpclient.execute(post, context)) {
+                assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
 
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
+                loginPageBody = EntityUtils.toString(response.getEntity());
+            }
+            assertTrue(loginPageBody.contains("username"));
+            assertTrue(loginPageBody.contains("password"));
 
-        responseBody = EntityUtils.toString(response.getEntity());
-
-        assertTrue(responseBody.contains("username"));
-        assertTrue(responseBody.contains("password"));
-
-        response = authenticateToWA(username, "PasswordChanged123!", responseBody, httpclient, context);
-
-        // 4a. WA attribute consent screen
-        responseBody = EntityUtils.toString(response.getEntity());
-
-        // check attribute repository
-        assertTrue(responseBody.contains("identifier"));
-        assertTrue(responseBody.contains("[value1]"));
-
-        execution = extractWAExecution(responseBody);
-
-        form.clear();
-        form = new ArrayList<>();
-        form.add(new BasicNameValuePair("_eventId", "confirm"));
-        form.add(new BasicNameValuePair("execution", execution));
-        form.add(new BasicNameValuePair("option", "1"));
-        form.add(new BasicNameValuePair("reminder", "30"));
-        form.add(new BasicNameValuePair("reminderTimeUnit", "days"));
-
-        post = new HttpPost(WA_ADDRESS + "/login");
-        post.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        post.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        post.setEntity(new UrlEncodedFormEntity(form, Consts.UTF_8));
-        response = httpclient.execute(post, context);
-
-        assertEquals(HttpStatus.SC_MOVED_TEMPORARILY, response.getStatusLine().getStatusCode());
-
-        // 4b. WA scope consent screen
-        get = new HttpGet(response.getLastHeader(HttpHeaders.LOCATION).getValue());
-        get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-
-        responseBody = EntityUtils.toString(response.getEntity());
-
-        String allow = Jsoup.parse(responseBody).body().
-                getElementsByTag("a").select("a[name=allow]").first().
-                attr("href");
-        assertNotNull(allow);
-
-        // 4c. finally get requested content
-        get = new HttpGet(allow);
-        get.addHeader(HttpHeaders.ACCEPT, MediaType.TEXT_HTML);
-        get.addHeader(HttpHeaders.ACCEPT_LANGUAGE, EN_LANGUAGE);
-        response = httpclient.execute(get, context);
-
-        // 4d. verify that user is now authenticated
-        assertEquals(HttpStatus.SC_OK, response.getStatusLine().getStatusCode());
-        assertTrue(EntityUtils.toString(response.getEntity()).contains(username));
-
-        // 5. logout
-        get = new HttpGet(CONSOLE_ADDRESS.equals(baseURL)
-                ? baseURL + "wicket/bookmarkable/org.apache.syncope.client.console.pages.Logout"
-                : baseURL + "wicket/bookmarkable/org.apache.syncope.client.enduser.pages.Logout");
-        httpclient.execute(get, context);
+            // 5. login and logout with new password
+            loginlogout(httpclient, context, baseURL, loginPageBody, username, newpassword);
+        }
     }
 
     @Override

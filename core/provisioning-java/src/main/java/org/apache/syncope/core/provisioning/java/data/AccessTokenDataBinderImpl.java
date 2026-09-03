@@ -28,6 +28,7 @@ import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.syncope.common.keymaster.client.api.ConfParamOps;
+import org.apache.syncope.common.keymaster.client.api.StandardConfParams;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.to.AccessTokenTO;
 import org.apache.syncope.common.lib.types.ClientExceptionType;
@@ -97,8 +98,8 @@ public class AccessTokenDataBinderImpl implements AccessTokenDataBinder {
         try {
             jwt.sign(jwsSigner);
         } catch (JOSEException e) {
-            SyncopeClientException sce = SyncopeClientException.build(ClientExceptionType.InvalidAccessToken);
-            sce.getElements().add(e.getMessage());
+            SyncopeClientException sce = SyncopeClientException.build(ClientExceptionType.ExecutionError);
+            sce.getElements().add("While signing AccessToken: " + e.getMessage());
             throw sce;
         }
         return new AccessTokenInfo(jwt.serialize(), expiration);
@@ -107,13 +108,14 @@ public class AccessTokenDataBinderImpl implements AccessTokenDataBinder {
     protected AccessToken replace(
             final String subject,
             final Map<String, Object> claims,
-            final byte[] authorities,
+            final String authorities,
             final AccessToken accessToken) {
 
         AccessTokenInfo generated = generateJWT(
                 accessToken.getKey(),
                 subject,
-                confParamOps.get(AuthContextUtils.getDomain(), "jwt.lifetime.minutes", 120L, Long.class),
+                confParamOps.get(
+                        AuthContextUtils.getDomain(), StandardConfParams.JWT_LIFETIME_MINUTES, 120L, long.class),
                 claims);
 
         accessToken.setBody(generated.jwt());
@@ -132,7 +134,7 @@ public class AccessTokenDataBinderImpl implements AccessTokenDataBinder {
             final Optional<String> key,
             final String subject,
             final Map<String, Object> claims,
-            final byte[] authorities,
+            final String authorities,
             final boolean replace) {
 
         AccessToken accessToken = accessTokenDAO.findByOwner(subject).
@@ -158,10 +160,11 @@ public class AccessTokenDataBinderImpl implements AccessTokenDataBinder {
     }
 
     @Override
-    public AccessTokenInfo update(final AccessToken accessToken, final byte[] authorities) {
+    public AccessTokenInfo update(final AccessToken accessToken, final String authorities) {
         credentialChecker.checkIsDefaultJWSKeyInUse();
 
-        long duration = confParamOps.get(AuthContextUtils.getDomain(), "jwt.lifetime.minutes", 120L, Long.class);
+        long duration = confParamOps.get(
+                AuthContextUtils.getDomain(), StandardConfParams.JWT_LIFETIME_MINUTES, 120L, long.class);
 
         OffsetDateTime currentTime = OffsetDateTime.now();
 
@@ -176,8 +179,8 @@ public class AccessTokenDataBinderImpl implements AccessTokenDataBinder {
             jwt = new SignedJWT(new JWSHeader(jwsSigner.getJwsAlgorithm()), claimsSet.build());
             jwt.sign(jwsSigner);
         } catch (ParseException | JOSEException e) {
-            SyncopeClientException sce = SyncopeClientException.build(ClientExceptionType.InvalidAccessToken);
-            sce.getElements().add(e.getMessage());
+            SyncopeClientException sce = SyncopeClientException.build(ClientExceptionType.ExecutionError);
+            sce.getElements().add("While signing AccessToken: " + e.getMessage());
             throw sce;
         }
         String body = jwt.serialize();

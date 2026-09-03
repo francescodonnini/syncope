@@ -77,7 +77,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Note that this controller does not extend {@link AbstractTransactionalLogic}, hence does not provide any
  * Spring's Transactional logic at class level.
  */
-public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
+public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> implements GroupLogicOp {
 
     protected final UserDAO userDAO;
 
@@ -145,6 +145,7 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
 
     @PreAuthorize("isAuthenticated() and not(hasRole('" + IdRepoEntitlement.ANONYMOUS + "'))")
     @Transactional(readOnly = true)
+    @Override
     public List<GroupTO> own() {
         if (securityProperties.getAdminUser().equals(AuthContextUtils.getUsername())) {
             return List.of();
@@ -172,7 +173,7 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
         Set<String> authRealms = RealmUtils.getEffective(
                 AuthContextUtils.getAuthorizations().get(IdRepoEntitlement.GROUP_SEARCH), realm);
 
-        SearchCond effectiveCond = searchCond == null ? groupDAO.getAllMatchingCond() : searchCond;
+        SearchCond effectiveCond = searchCond == null ? searchDAO.getAllMatchingCond() : searchCond;
 
         long count = searchDAO.count(base, recursive, authRealms, effectiveCond, AnyTypeKind.GROUP);
 
@@ -186,6 +187,7 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
     }
 
     @PreAuthorize("hasRole('" + IdRepoEntitlement.GROUP_CREATE + "')")
+    @Override
     public ProvisioningResult<GroupTO> create(final GroupCR createReq, final boolean nullPriorityAsync) {
         BeforeResult<GroupCR> before = beforeCreate(createReq);
 
@@ -254,12 +256,8 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
                 before.key().getKey(),
                 before.key().getRealm());
 
-        List<Group> ownedGroups = groupDAO.findOwnedByGroup(before.key().getKey());
-        if (!ownedGroups.isEmpty()) {
-            SyncopeClientException sce = SyncopeClientException.build(ClientExceptionType.GroupOwnership);
-            sce.getElements().addAll(ownedGroups.stream().
-                    map(g -> g.getKey() + ' ' + g.getName()).toList());
-            throw sce;
+        if (groupDAO.isManager(before.key().getKey())) {
+            throw SyncopeClientException.build(ClientExceptionType.Management);
         }
 
         List<PropagationStatus> statuses = provisioningManager.delete(
@@ -295,12 +293,10 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
     public GroupTO unlink(final String key, final Collection<String> resources) {
         GroupTO groupTO = updateChecks(key);
 
-        GroupUR req = new GroupUR.Builder(key).
+        GroupUR req = new GroupUR.Builder(groupTO.getKey()).
                 resources(resources.stream().
                         map(r -> new StringPatchItem.Builder().operation(PatchOperation.DELETE).value(r).build()).
                         toList()).
-                udynMembershipCond(groupTO.getUDynMembershipCond()).
-                adynMembershipConds(groupTO.getADynMembershipConds()).
                 build();
 
         return binder.getGroupTO(provisioningManager.unlink(req, AuthContextUtils.getUsername(), REST_CONTEXT));
@@ -311,12 +307,10 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
     public GroupTO link(final String key, final Collection<String> resources) {
         GroupTO groupTO = updateChecks(key);
 
-        GroupUR req = new GroupUR.Builder(key).
+        GroupUR req = new GroupUR.Builder(groupTO.getKey()).
                 resources(resources.stream().
                         map(r -> new StringPatchItem.Builder().operation(PatchOperation.ADD_REPLACE).value(r).build()).
                         toList()).
-                udynMembershipCond(groupTO.getUDynMembershipCond()).
-                adynMembershipConds(groupTO.getADynMembershipConds()).
                 build();
 
         return binder.getGroupTO(provisioningManager.link(req, AuthContextUtils.getUsername(), REST_CONTEXT));
@@ -329,12 +323,10 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
 
         GroupTO groupTO = updateChecks(key);
 
-        GroupUR req = new GroupUR.Builder(key).
+        GroupUR req = new GroupUR.Builder(groupTO.getKey()).
                 resources(resources.stream().
                         map(r -> new StringPatchItem.Builder().operation(PatchOperation.DELETE).value(r).build()).
                         toList()).
-                udynMembershipCond(groupTO.getUDynMembershipCond()).
-                adynMembershipConds(groupTO.getADynMembershipConds()).
                 build();
 
         return update(req, nullPriorityAsync);
@@ -351,12 +343,10 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
 
         GroupTO groupTO = updateChecks(key);
 
-        GroupUR req = new GroupUR.Builder(key).
+        GroupUR req = new GroupUR.Builder(groupTO.getKey()).
                 resources(resources.stream().
                         map(r -> new StringPatchItem.Builder().operation(PatchOperation.ADD_REPLACE).value(r).build()).
                         toList()).
-                udynMembershipCond(groupTO.getUDynMembershipCond()).
-                adynMembershipConds(groupTO.getADynMembershipConds()).
                 build();
 
         return update(req, nullPriorityAsync);
@@ -405,6 +395,7 @@ public class GroupLogic extends AbstractAnyLogic<GroupTO, GroupCR, GroupUR> {
     @PreAuthorize("hasRole('" + IdRepoEntitlement.TASK_CREATE + "') "
             + "and hasRole('" + IdRepoEntitlement.TASK_EXECUTE + "')")
     @Transactional
+    @Override
     public ExecTO provisionMembers(final String key, final ProvisionAction action) {
         Group group = groupDAO.findById(key).orElseThrow(() -> new NotFoundException("Group " + key));
 

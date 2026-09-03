@@ -29,7 +29,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.apache.syncope.core.persistence.api.dao.JobStatusDAO;
-import org.apache.syncope.core.provisioning.api.job.StoppableSchedTaskJobDelegate;
+import org.apache.syncope.core.provisioning.api.job.StoppableJobDelegate;
 import org.apache.syncope.core.spring.security.AuthContextUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,15 +39,13 @@ import org.springframework.scheduling.support.CronTrigger;
 
 public class SyncopeTaskScheduler {
 
-    protected record Key(String domain, String job) {
+    public record Key(String domain, String job) {
 
     }
 
-    protected record Value(Job job, Optional<ScheduledFuture<?>> instant, Optional<ScheduledFuture<?>> cron) {
+    public record Value(Job job, Optional<ScheduledFuture<?>> instant, Optional<ScheduledFuture<?>> cron) {
 
     }
-
-    public static final String CACHE = "jobCache";
 
     protected static final Logger LOG = LoggerFactory.getLogger(SyncopeTaskScheduler.class);
 
@@ -101,9 +99,7 @@ public class SyncopeTaskScheduler {
     protected void stop(final Key key, final List<Function<Value, Optional<ScheduledFuture<?>>>> suppliers) {
         Optional.ofNullable(jobs.get(key)).ifPresent(value -> {
             boolean mayInterruptIfRunning;
-            if (value.job() instanceof TaskJob taskJob
-                    && taskJob.getDelegate() instanceof StoppableSchedTaskJobDelegate stoppable) {
-
+            if (value.job().getDelegate() instanceof StoppableJobDelegate stoppable) {
                 stoppable.stop();
                 mayInterruptIfRunning = false;
             } else {
@@ -151,5 +147,9 @@ public class SyncopeTaskScheduler {
 
     public List<String> getJobNames(final String domain) {
         return jobs.keySet().stream().filter(key -> domain.equals(key.domain())).map(Key::job).toList();
+    }
+
+    public Map<Key, Value> getJobs() {
+        return Map.copyOf(jobs);
     }
 }

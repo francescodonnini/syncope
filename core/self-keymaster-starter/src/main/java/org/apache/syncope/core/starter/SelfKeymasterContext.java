@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.starter;
 
-import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
 import io.swagger.v3.oas.integration.api.OpenAPIConfiguration;
 import io.swagger.v3.oas.models.ExternalDocumentation;
 import io.swagger.v3.oas.models.media.Schema;
@@ -73,7 +72,6 @@ import org.apache.syncope.core.provisioning.api.UserProvisioningManager;
 import org.apache.syncope.core.rest.cxf.JavaDocUtils;
 import org.apache.syncope.core.rest.cxf.RestServiceExceptionMapper;
 import org.apache.syncope.core.spring.security.AuthDataAccessor;
-import org.apache.syncope.core.spring.security.DefaultCredentialChecker;
 import org.apache.syncope.core.spring.security.SecurityProperties;
 import org.apache.syncope.core.spring.security.UsernamePasswordAuthenticationProvider;
 import org.apache.syncope.core.spring.security.WebSecurityContext;
@@ -90,6 +88,7 @@ import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
+import tools.jackson.jakarta.rs.json.JacksonJsonProvider;
 
 @EnableConfigurationProperties(KeymasterProperties.class)
 @Configuration(proxyBeanMethods = false)
@@ -180,7 +179,7 @@ public class SelfKeymasterContext {
 
                     ExternalDocumentation extDoc = new ExternalDocumentation();
                     extDoc.setDescription("Apache Syncope Reference Guide");
-                    extDoc.setUrl("https://syncope.apache.org/docs/3.0/reference-guide.html#domains");
+                    extDoc.setUrl("https://syncope.apache.org/docs/4.1/reference-guide.html#domains");
 
                     Schema<String> schema = new Schema<>();
                     schema.setDescription("Domains are built to facilitate multitenancy.");
@@ -221,19 +220,17 @@ public class SelfKeymasterContext {
             final DomainOps domainOps,
             final AuthDataAccessor dataAccessor,
             final UserProvisioningManager provisioningManager,
-            final DefaultCredentialChecker credentialChecker,
             final SecurityProperties securityProperties,
-            final KeymasterProperties keymasterProperties,
-            final EncryptorManager encryptorManager) {
+            final EncryptorManager encryptorManager,
+            final KeymasterProperties keymasterProperties) {
 
         return new SelfKeymasterUsernamePasswordAuthenticationProvider(
                 domainOps,
                 dataAccessor,
                 provisioningManager,
-                credentialChecker,
                 securityProperties,
-                keymasterProperties,
-                encryptorManager);
+                encryptorManager,
+                keymasterProperties);
     }
 
     @Bean

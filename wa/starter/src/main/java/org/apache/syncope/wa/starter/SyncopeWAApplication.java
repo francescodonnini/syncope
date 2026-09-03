@@ -24,28 +24,20 @@ import org.apache.syncope.wa.bootstrap.WAProperties;
 import org.apache.syncope.wa.bootstrap.WARestClient;
 import org.apache.syncope.wa.starter.config.WARefreshContextJob;
 import org.apereo.cas.config.CasGoogleAuthenticatorLdapAutoConfiguration;
+import org.apereo.cas.config.CasJdbcPasswordManagementAutoConfiguration;
 import org.apereo.cas.configuration.CasConfigurationProperties;
 import org.apereo.cas.metadata.CasConfigurationPropertiesValidator;
 import org.apereo.cas.support.saml.idp.metadata.generator.SamlIdPMetadataGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.actuate.autoconfigure.jdbc.DataSourceHealthContributorAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
-import org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration;
-import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration;
-import org.springframework.boot.autoconfigure.gson.GsonAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.jersey.JerseyAutoConfiguration;
 import org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration;
-import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.data.jdbc.autoconfigure.DataJdbcRepositoriesAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.health.DataSourceHealthContributorAutoConfiguration;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.cloud.context.refresh.ContextRefresher;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
@@ -57,23 +49,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @SpringBootApplication(exclude = {
-    /*
-     * List of Spring Boot classes that we want to disable and remove from auto-configuration.
-     */
-    HibernateJpaAutoConfiguration.class,
-    JerseyAutoConfiguration.class,
-    GroovyTemplateAutoConfiguration.class,
-    GsonAutoConfiguration.class,
-    JmxAutoConfiguration.class,
     DataSourceAutoConfiguration.class,
     DataSourceHealthContributorAutoConfiguration.class,
-    DataSourceTransactionManagerAutoConfiguration.class,
-    RedisAutoConfiguration.class,
-    RedisRepositoriesAutoConfiguration.class,
-    MongoAutoConfiguration.class,
-    MongoDataAutoConfiguration.class,
-    CassandraAutoConfiguration.class,
-    CasGoogleAuthenticatorLdapAutoConfiguration.class
+    DataJdbcRepositoriesAutoConfiguration.class,
+    JmxAutoConfiguration.class,
+    CasGoogleAuthenticatorLdapAutoConfiguration.class,
+    CasJdbcPasswordManagementAutoConfiguration.class
 })
 @EnableConfigurationProperties({ WAProperties.class, CasConfigurationProperties.class })
 @EnableAsync(proxyTargetClass = false)

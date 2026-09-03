@@ -21,6 +21,7 @@ package org.apache.syncope.fit.console;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import java.util.stream.Stream;
 import org.apache.syncope.client.ui.commons.Constants;
 import org.apache.syncope.client.ui.commons.status.Status;
 import org.apache.syncope.client.ui.commons.status.StatusBean;
@@ -30,6 +31,9 @@ import org.apache.wicket.markup.html.basic.Label;
 import org.apache.wicket.util.tester.FormTester;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class BatchesITCase extends AbstractConsoleITCase {
 
@@ -44,8 +48,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
 
     @Test
     public void users() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
 
         Component component = findComponentByProp("username", CONTAINER
                 + "searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -69,8 +72,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
 
     @Test
     public void userResource() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -80,7 +82,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
         // manage resource
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:searchResult:outerObjectsRepeater:1"
-                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:4:"
+                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:5:"
                 + "action:action");
 
         TESTER.assertComponent(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:status:"
@@ -111,20 +113,18 @@ public class BatchesITCase extends AbstractConsoleITCase {
                 + "form:content:status:secondLevelContainer:second:container", "resource-csv"));
     }
 
-    @Test
-    public void userStatus() {
-        userStatusBatch(1, "resource-testdb2");
+    private static Stream<Arguments> userStatusProvider() {
+        return Stream.of(
+                Arguments.of(1, "resource-testdb2"),
+                Arguments.of(0, Constants.SYNCOPE)
+        );
     }
 
-    @Test
-    public void userStatusOnSyncopeOnly() {
-        userStatusBatch(0, Constants.SYNCOPE);
-    }
-
-    private static void userStatusBatch(final int index, final String resource) {
+    @ParameterizedTest
+    @MethodSource("userStatusProvider")
+    void userStatusBatch(final int index, final String resource) {
         // suspend 
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
 
         Component component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -134,7 +134,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
         // enable
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:searchResult:outerObjectsRepeater:1"
-                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:3:"
+                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:4:"
                 + "action:action");
 
         TESTER.assertComponent(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:status:"
@@ -190,8 +190,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
         assertEquals(resource, StatusBean.class.cast(component.getDefaultModelObject()).getResource());
 
         // re-activate
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
+        TESTER.clickLink(ANY_PAGE, false);
 
         component = findComponentByProp("username", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "rossini");
@@ -201,7 +200,7 @@ public class BatchesITCase extends AbstractConsoleITCase {
         // enable
         TESTER.clickLink(
                 "body:content:body:container:content:tabbedPanel:panel:searchResult:outerObjectsRepeater:1"
-                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:3:"
+                + ":outer:container:content:togglePanelContainer:container:actions:actions:actionRepeater:4:"
                 + "action:action");
 
         TESTER.assertComponent(TAB_PANEL + "outerObjectsRepeater:0:outer:form:content:status:"
@@ -254,8 +253,8 @@ public class BatchesITCase extends AbstractConsoleITCase {
 
     @Test
     public void groupResource() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:1:link");
 
         Component component = findComponentByProp("name", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable", "director");
@@ -303,8 +302,8 @@ public class BatchesITCase extends AbstractConsoleITCase {
 
     @Test
     public void printerResource() {
-        TESTER.clickLink("body:realmsLI:realms", false);
-        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:3:link");
+        TESTER.clickLink(ANY_PAGE, false);
+        TESTER.clickLink("body:content:body:container:content:tabbedPanel:tabs-container:tabs:2:link");
 
         Component component = findComponentByProp("key", CONTAINER
                 + ":searchContainer:resultTable:tablePanel:groupForm:checkgroup:dataTable",

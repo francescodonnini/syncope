@@ -28,7 +28,6 @@ import java.util.Set;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.syncope.common.lib.request.AnyUR;
-import org.apache.syncope.common.lib.request.GroupUR;
 import org.apache.syncope.common.lib.request.StringPatchItem;
 import org.apache.syncope.common.lib.to.AnyTO;
 import org.apache.syncope.common.lib.to.Provision;
@@ -41,7 +40,6 @@ import org.apache.syncope.common.lib.types.ResourceOperation;
 import org.apache.syncope.common.lib.types.UnmatchingRule;
 import org.apache.syncope.core.persistence.api.entity.Any;
 import org.apache.syncope.core.persistence.api.entity.ExternalResource;
-import org.apache.syncope.core.persistence.api.entity.group.Group;
 import org.apache.syncope.core.persistence.api.entity.task.PushTask;
 import org.apache.syncope.core.persistence.api.entity.user.User;
 import org.apache.syncope.core.provisioning.api.AuditManager;
@@ -52,9 +50,9 @@ import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
 import org.apache.syncope.core.provisioning.api.notification.NotificationManager;
 import org.apache.syncope.core.provisioning.api.propagation.PropagationReporter;
 import org.apache.syncope.core.provisioning.api.propagation.PropagationTaskInfo;
+import org.apache.syncope.core.provisioning.api.pushpull.AnyPushResultHandler;
 import org.apache.syncope.core.provisioning.api.pushpull.IgnoreProvisionException;
 import org.apache.syncope.core.provisioning.api.pushpull.PushActions;
-import org.apache.syncope.core.provisioning.api.pushpull.SyncopePushResultHandler;
 import org.apache.syncope.core.provisioning.java.job.AfterHandlingJob;
 import org.apache.syncope.core.provisioning.java.job.SyncopeTaskScheduler;
 import org.apache.syncope.core.provisioning.java.propagation.DefaultPropagationReporter;
@@ -65,7 +63,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHandler<PushTask, PushActions>
-        implements SyncopePushResultHandler {
+        implements AnyPushResultHandler {
 
     protected static void reportPropagation(final ProvisioningReport result, final PropagationReporter reporter) {
         if (!reporter.getStatuses().isEmpty()) {
@@ -138,7 +136,7 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
             final ConnectorObject beforeObj,
             final ProvisioningReport result) {
 
-        List<String> ownedResources = getAnyUtils().getAllResources(any).stream().
+        List<String> ownedResources = anyUtils().getAllResources(any).stream().
                 map(ExternalResource::getKey).toList();
 
         List<String> noPropResources = new ArrayList<>(ownedResources);
@@ -212,22 +210,11 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
         }
     }
 
-    protected void copyDynMembershipConds(final Any any, final AnyUR req) {
-        if (any instanceof Group group && req instanceof GroupUR gur) {
-            Optional.ofNullable(group.getUDynMembership()).
-                    ifPresent(udc -> gur.setUDynMembershipCond(udc.getFIQLCond()));
-
-            group.getADynMemberships().
-                    forEach(adc -> gur.getADynMembershipConds().put(adc.getAnyType().getKey(), adc.getFIQLCond()));
-        }
-    }
-
     protected void link(final Any any, final boolean unlink, final ProvisioningReport result) {
-        AnyUR req = getAnyUtils().newAnyUR(any.getKey());
+        AnyUR req = anyUtils().newAnyUR(any.getKey());
         req.getResources().add(new StringPatchItem.Builder().
                 operation(unlink ? PatchOperation.DELETE : PatchOperation.ADD_REPLACE).
                 value(profile.getTask().getResource().getKey()).build());
-        copyDynMembershipConds(any, req);
 
         update(req);
 
@@ -235,11 +222,10 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
     }
 
     protected void unassign(final Any any, final ConnectorObject beforeObj, final ProvisioningReport result) {
-        AnyUR req = getAnyUtils().newAnyUR(any.getKey());
+        AnyUR req = anyUtils().newAnyUR(any.getKey());
         req.getResources().add(new StringPatchItem.Builder().
                 operation(PatchOperation.DELETE).
                 value(profile.getTask().getResource().getKey()).build());
-        copyDynMembershipConds(any, req);
 
         update(req);
 
@@ -247,11 +233,10 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
     }
 
     protected void assign(final Any any, final Boolean enabled, final ProvisioningReport result) {
-        AnyUR req = getAnyUtils().newAnyUR(any.getKey());
+        AnyUR req = anyUtils().newAnyUR(any.getKey());
         req.getResources().add(new StringPatchItem.Builder().
                 operation(PatchOperation.ADD_REPLACE).
                 value(profile.getTask().getResource().getKey()).build());
-        copyDynMembershipConds(any, req);
 
         update(req);
 
@@ -260,11 +245,8 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
-    public boolean handle(final String anyKey) {
-        Any any = null;
+    public boolean handle(final Any any) {
         try {
-            any = getAnyUtils().dao().authFind(anyKey);
-
             Provision provision = profile.getTask().getResource().
                     getProvisionByAnyType(any.getType().getKey()).orElse(null);
             if (provision == null) {
@@ -282,12 +264,12 @@ public abstract class AbstractPushResultHandler extends AbstractSyncopeResultHan
             return true;
         } catch (IgnoreProvisionException e) {
             ProvisioningReport ignoreResult = profile.getResults().stream().
-                    filter(report -> anyKey.equalsIgnoreCase(report.getKey())).
+                    filter(report -> any.getKey().equalsIgnoreCase(report.getKey())).
                     findFirst().
                     orElse(null);
             if (ignoreResult == null) {
                 ignoreResult = new ProvisioningReport();
-                ignoreResult.setKey(anyKey);
+                ignoreResult.setKey(any.getKey());
                 ignoreResult.setAnyType(Optional.ofNullable(any).map(any1 -> any1.getType().getKey()).orElse(null));
 
                 profile.getResults().add(ignoreResult);

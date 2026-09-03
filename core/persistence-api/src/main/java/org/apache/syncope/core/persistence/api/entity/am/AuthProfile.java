@@ -23,6 +23,7 @@ import org.apache.syncope.common.lib.wa.GoogleMfaAuthAccount;
 import org.apache.syncope.common.lib.wa.GoogleMfaAuthToken;
 import org.apache.syncope.common.lib.wa.ImpersonationAccount;
 import org.apache.syncope.common.lib.wa.MfaTrustedDevice;
+import org.apache.syncope.common.lib.wa.WAConsentDecision;
 import org.apache.syncope.common.lib.wa.WebAuthnDeviceCredential;
 import org.apache.syncope.core.persistence.api.entity.Entity;
 
@@ -32,23 +33,27 @@ public interface AuthProfile extends Entity {
 
     void setOwner(String owner);
 
+    boolean add(GoogleMfaAuthToken googleMfaAuthToken);
+
     List<GoogleMfaAuthToken> getGoogleMfaAuthTokens();
 
-    void setGoogleMfaAuthTokens(List<GoogleMfaAuthToken> tokens);
+    boolean add(GoogleMfaAuthAccount googleMfaAuthAccount);
 
     List<GoogleMfaAuthAccount> getGoogleMfaAuthAccounts();
 
-    void setGoogleMfaAuthAccounts(List<GoogleMfaAuthAccount> accounts);
+    boolean add(MfaTrustedDevice mfaTrustedDevice);
 
     List<MfaTrustedDevice> getMfaTrustedDevices();
 
-    void setMfaTrustedDevices(List<MfaTrustedDevice> records);
+    boolean add(WebAuthnDeviceCredential webAuthnDeviceCredential);
 
     List<WebAuthnDeviceCredential> getWebAuthnDeviceCredentials();
 
-    void setWebAuthnDeviceCredentials(List<WebAuthnDeviceCredential> credentials);
+    boolean add(ImpersonationAccount impersonationAccount);
 
     List<ImpersonationAccount> getImpersonationAccounts();
 
-    void setImpersonationAccounts(List<ImpersonationAccount> accounts);
+    boolean add(WAConsentDecision consentDecision);
+
+    List<WAConsentDecision> getConsentDecisions();
 }

@@ -28,12 +28,10 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.core.GenericType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 import java.util.Locale;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.client.lib.SyncopeClientFactoryBean;
-import org.apache.syncope.common.keymaster.client.api.model.Domain;
 import org.apache.syncope.common.lib.SyncopeConstants;
 import org.apache.syncope.common.lib.request.UserCR;
 import org.apache.syncope.common.lib.to.ConnInstanceTO;
@@ -79,10 +77,6 @@ public class MultitenancyITCase extends AbstractITCase {
     public void multitenancyCheck() {
         assumeTrue(domainOps.list().stream().anyMatch(d -> "Two".equals(d.getKey())));
 
-        List<Domain> initial = domainOps.list();
-        assertNotNull(initial);
-        assumeTrue(initial.stream().anyMatch(domain -> "Two".equals(domain.getKey())));
-
         CLIENT_FACTORY = new SyncopeClientFactoryBean().setAddress(ADDRESS).setDomain("Two");
 
         ADMIN_CLIENT = CLIENT_FACTORY.create(ADMIN_UNAME, "password2");
@@ -97,7 +91,7 @@ public class MultitenancyITCase extends AbstractITCase {
     @Test
     public void readRealm() {
         PagedResult<RealmTO> realms = ADMIN_CLIENT.getService(RealmService.class).
-                search(new RealmQuery.Builder().keyword("*").build());
+                search(new RealmQuery.Builder().build());
         assertEquals(1, realms.getTotalCount());
         assertEquals(1, realms.getResult().size());
         assertEquals(SyncopeConstants.ROOT_REALM, realms.getResult().getFirst().getName());
@@ -106,7 +100,7 @@ public class MultitenancyITCase extends AbstractITCase {
     @Test
     public void createUser() {
         assertNull(ADMIN_CLIENT.getService(RealmService.class).
-                search(new RealmQuery.Builder().keyword("*").build()).getResult().getFirst().getPasswordPolicy());
+                search(new RealmQuery.Builder().build()).getResult().getFirst().getPasswordPolicy());
 
         UserCR userCR = new UserCR();
         userCR.setRealm(SyncopeConstants.ROOT_REALM);
@@ -202,13 +196,8 @@ public class MultitenancyITCase extends AbstractITCase {
             assertEquals(ExecStatus.SUCCESS, ExecStatus.valueOf(status));
 
             // verify that pulled user is found
-            if (IS_EXT_SEARCH_ENABLED) {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    // ignore
-                }
-            }
+            awaitIfExtSearchEnabled();
+
             PagedResult<UserTO> matchingUsers = ADMIN_CLIENT.getService(UserService.class).
                     search(new AnyQuery.Builder().
                             realm(SyncopeConstants.ROOT_REALM).

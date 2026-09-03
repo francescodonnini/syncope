@@ -48,7 +48,7 @@ import org.apache.syncope.core.persistence.api.entity.task.TaskExec;
 import org.apache.syncope.core.persistence.api.utils.ExceptionUtils2;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionContext;
 import org.apache.syncope.core.provisioning.api.job.JobExecutionException;
-import org.apache.syncope.core.provisioning.api.job.StoppableSchedTaskJobDelegate;
+import org.apache.syncope.core.provisioning.api.job.StoppableJobDelegate;
 import org.apache.syncope.core.provisioning.api.pushpull.InboundActions;
 import org.apache.syncope.core.provisioning.api.pushpull.LiveSyncDeltaMapper;
 import org.apache.syncope.core.provisioning.api.pushpull.ProvisioningProfile;
@@ -68,7 +68,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 public class LiveSyncJobDelegate
         extends AbstractPullExecutor<LiveSyncTask>
-        implements SyncopePullExecutor, StoppableSchedTaskJobDelegate {
+        implements SyncopePullExecutor, StoppableJobDelegate {
 
     protected record LiveSyncInfo(
             Provision provision,
@@ -150,7 +150,7 @@ public class LiveSyncJobDelegate
             }
         };
 
-        dispatcher = new PullResultHandlerDispatcher(profile, this);
+        dispatcher = buildDispatcher();
 
         infos = new ArrayList<>();
 
@@ -198,7 +198,6 @@ public class LiveSyncJobDelegate
                         orElseThrow(() -> new NotFoundException("PlainSchema " + provision.getUidOnCreate()));
             }
 
-            ghandler = buildGroupHandler();
             dispatcher.addHandlerSupplier(provision.getObjectClass(), () -> {
                 SyncopePullResultHandler handler;
                 switch (anyType.getKind()) {
@@ -207,7 +206,7 @@ public class LiveSyncJobDelegate
                         break;
 
                     case GROUP:
-                        handler = ghandler;
+                        handler = buildGroupHandler();
                         break;
 
                     case ANY_OBJECT:
@@ -322,14 +321,6 @@ public class LiveSyncJobDelegate
                             r.getKey(),
                             info.uidOnCreate(),
                             r.getUidValue()));
-                }
-
-                if (info.anyTypeKind() == AnyTypeKind.GROUP) {
-                    try {
-                        setGroupOwners();
-                    } catch (Exception e) {
-                        LOG.error("While setting group owners", e);
-                    }
                 }
             });
 

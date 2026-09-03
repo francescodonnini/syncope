@@ -87,13 +87,18 @@ public class LDAPMembershipPropagationActions implements PropagationActions {
         return "ldapGroups";
     }
 
+    @Override
+    public Set<String> moreAttrsToGet(final Optional<PropagationTaskInfo> taskInfo, final Provision provision) {
+        return Set.of(getGroupMembershipAttrName());
+    }
+
     protected String evaluateGroupConnObjectLink(final String connObjectLinkTemplate, final Group group) {
         LOG.debug("Evaluating connObjectLink for {}", group);
 
         JexlContext jexlContext = new JexlContextBuilder().
                 fields(group).
                 plainAttrs(group.getPlainAttrs()).
-                derAttrs(group, derAttrHandler).
+                derAttrs(derAttrHandler.getValues(group)).
                 build();
 
         return jexlTools.evaluateExpression(connObjectLinkTemplate, jexlContext).toString();

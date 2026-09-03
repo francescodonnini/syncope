@@ -24,20 +24,44 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import jakarta.ws.rs.core.Response;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.syncope.common.lib.OIDCStandardScope;
 import org.apache.syncope.common.lib.SyncopeClientException;
 import org.apache.syncope.common.lib.policy.AccessPolicyTO;
 import org.apache.syncope.common.lib.policy.AuthPolicyTO;
 import org.apache.syncope.common.lib.to.CASSPClientAppTO;
+import org.apache.syncope.common.lib.to.OIDCOpEntityTO;
 import org.apache.syncope.common.lib.to.OIDCRPClientAppTO;
 import org.apache.syncope.common.lib.to.SAML2SPClientAppTO;
 import org.apache.syncope.common.lib.types.ClientAppType;
+import org.apache.syncope.common.lib.types.ClientExceptionType;
 import org.apache.syncope.common.lib.types.PolicyType;
 import org.apache.syncope.fit.AbstractITCase;
 import org.junit.jupiter.api.Test;
 
 public class ClientAppITCase extends AbstractITCase {
+
+    private static OIDCOpEntityTO getOIDCOpEntityTO() {
+        OIDCOpEntityTO oidcOpEntityTO = null;
+        try {
+            oidcOpEntityTO = OIDC_OP_ENTITY_SERVICE.get();
+        } catch (SyncopeClientException e) {
+            if (e.getType() == ClientExceptionType.NotFound) {
+                try (Response response = OIDC_OP_ENTITY_SERVICE.generate("syncope", "RSA", 2048)) {
+                    oidcOpEntityTO = response.readEntity(OIDCOpEntityTO.class);
+                } catch (Exception ge) {
+                    fail("While generating new OIDC JWKS", ge);
+                }
+            } else {
+                throw e;
+            }
+        }
+        assertNotNull(oidcOpEntityTO);
+        return oidcOpEntityTO;
+    }
 
     @Test
     public void createSAML2SP() {
@@ -121,6 +145,7 @@ public class ClientAppITCase extends AbstractITCase {
         assertFalse(found.getSupportedResponseTypes().isEmpty());
         assertNotNull(found.getAccessPolicy());
         assertNotNull(found.getAuthPolicy());
+        assertNotNull(found.getAccessTokenMaxTimeToLive());
     }
 
     @Test
@@ -139,6 +164,27 @@ public class ClientAppITCase extends AbstractITCase {
         OIDCRPClientAppTO oidcrpTO = buildOIDCRP();
         oidcrpTO = createClientApp(ClientAppType.OIDCRP, oidcrpTO);
 
+        // attempt to set a scope not defined by OIDC OP -> fail
+        oidcrpTO.getScopes().add(OIDCStandardScope.openid.name());
+        oidcrpTO.getScopes().add(OIDCStandardScope.profile.name());
+        oidcrpTO.getScopes().add("missing");
+
+        OIDCOpEntityTO oidcOpEntityTO = getOIDCOpEntityTO();
+        oidcOpEntityTO.getCustomScopes().clear();
+        OIDC_OP_ENTITY_SERVICE.set(oidcOpEntityTO);
+
+        try {
+            CLIENT_APP_SERVICE.update(ClientAppType.OIDCRP, oidcrpTO);
+            fail();
+        } catch (SyncopeClientException e) {
+            assertEquals(ClientExceptionType.InvalidValues, e.getType());
+            assertTrue(e.getElements().iterator().next().startsWith("Undefined OIDC scope(s)"));
+        }
+
+        // adjust OIDC OP to support the new scope
+        oidcOpEntityTO.getCustomScopes().put("missing", Set.of());
+        OIDC_OP_ENTITY_SERVICE.set(oidcOpEntityTO);
+
         AccessPolicyTO accessPolicyTO = new AccessPolicyTO();
         accessPolicyTO.setKey("NewAccessPolicyTest_" + getUUIDString());
         accessPolicyTO.setName("New Access policy");
@@ -147,6 +193,7 @@ public class ClientAppITCase extends AbstractITCase {
 
         oidcrpTO.setClientId("newClientId");
         oidcrpTO.setAccessPolicy(accessPolicyTO.getKey());
+        oidcrpTO.setDeviceTokenTimeToKill("PT6M");
 
         CLIENT_APP_SERVICE.update(ClientAppType.OIDCRP, oidcrpTO);
         OIDCRPClientAppTO updated = CLIENT_APP_SERVICE.read(ClientAppType.OIDCRP, oidcrpTO.getKey());
@@ -154,6 +201,7 @@ public class ClientAppITCase extends AbstractITCase {
         assertNotNull(updated);
         assertEquals("newClientId", updated.getClientId());
         assertNotNull(updated.getAccessPolicy());
+        assertEquals("PT6M", updated.getDeviceTokenTimeToKill());
     }
 
     @Test

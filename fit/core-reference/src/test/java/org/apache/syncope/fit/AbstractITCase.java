@@ -21,9 +21,8 @@ package org.apache.syncope.fit;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.unboundid.ldap.sdk.AddRequest;
 import com.unboundid.ldap.sdk.Attribute;
@@ -47,6 +46,7 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +60,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.mutable.Mutable;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.cxf.configuration.jsse.TLSClientParameters;
 import org.apache.cxf.jaxrs.client.WebClient;
+import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.transport.https.InsecureTrustManager;
 import org.apache.syncope.client.lib.SyncopeAnonymousClient;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.client.lib.SyncopeClientFactoryBean;
@@ -71,6 +74,8 @@ import org.apache.syncope.common.keymaster.client.self.SelfKeymasterClientContex
 import org.apache.syncope.common.keymaster.client.zookeeper.ZookeeperKeymasterClientContext;
 import org.apache.syncope.common.lib.Attr;
 import org.apache.syncope.common.lib.SyncopeClientException;
+import org.apache.syncope.common.lib.SyncopeConstants;
+import org.apache.syncope.common.lib.jackson.SyncopeJsonMapper;
 import org.apache.syncope.common.lib.policy.AccessPolicyTO;
 import org.apache.syncope.common.lib.policy.AttrReleasePolicyTO;
 import org.apache.syncope.common.lib.policy.AuthPolicyTO;
@@ -91,6 +96,7 @@ import org.apache.syncope.common.lib.to.AnyObjectTO;
 import org.apache.syncope.common.lib.to.AuditEventTO;
 import org.apache.syncope.common.lib.to.ClientAppTO;
 import org.apache.syncope.common.lib.to.ConnInstanceTO;
+import org.apache.syncope.common.lib.to.EntityTO;
 import org.apache.syncope.common.lib.to.ExecTO;
 import org.apache.syncope.common.lib.to.GroupTO;
 import org.apache.syncope.common.lib.to.ImplementationTO;
@@ -138,14 +144,14 @@ import org.apache.syncope.common.rest.api.service.ClientAppService;
 import org.apache.syncope.common.rest.api.service.CommandService;
 import org.apache.syncope.common.rest.api.service.ConnectorService;
 import org.apache.syncope.common.rest.api.service.DelegationService;
-import org.apache.syncope.common.rest.api.service.DynRealmService;
 import org.apache.syncope.common.rest.api.service.GroupService;
 import org.apache.syncope.common.rest.api.service.ImplementationService;
 import org.apache.syncope.common.rest.api.service.MailTemplateService;
+import org.apache.syncope.common.rest.api.service.MfaService;
 import org.apache.syncope.common.rest.api.service.NotificationService;
 import org.apache.syncope.common.rest.api.service.OIDCC4UIProviderService;
 import org.apache.syncope.common.rest.api.service.OIDCC4UIService;
-import org.apache.syncope.common.rest.api.service.OIDCJWKSService;
+import org.apache.syncope.common.rest.api.service.OIDCOpEntityService;
 import org.apache.syncope.common.rest.api.service.PasswordManagementService;
 import org.apache.syncope.common.rest.api.service.PolicyService;
 import org.apache.syncope.common.rest.api.service.RealmService;
@@ -192,6 +198,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.context.support.TestPropertySourceUtils;
 import org.springframework.util.function.ThrowingFunction;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringJUnitConfig(
         classes = { CoreITContext.class, SelfKeymasterClientContext.class, ZookeeperKeymasterClientContext.class },
@@ -220,7 +228,7 @@ public abstract class AbstractITCase {
 
     protected static final Logger LOG = LoggerFactory.getLogger(AbstractITCase.class);
 
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
+    protected static final JsonMapper MAPPER = new SyncopeJsonMapper();
 
     protected static final String ADMIN_UNAME = "admin";
 
@@ -312,8 +320,6 @@ public abstract class AbstractITCase {
 
     protected static RoleService ROLE_SERVICE;
 
-    protected static DynRealmService DYN_REALM_SERVICE;
-
     protected static UserService USER_SERVICE;
 
     protected static UserSelfService USER_SELF_SERVICE;
@@ -321,6 +327,8 @@ public abstract class AbstractITCase {
     protected static UserRequestService USER_REQUEST_SERVICE;
 
     protected static UserWorkflowTaskService USER_WORKFLOW_TASK_SERVICE;
+
+    protected static MfaService MFA_SERVICE;
 
     protected static GroupService GROUP_SERVICE;
 
@@ -380,7 +388,7 @@ public abstract class AbstractITCase {
 
     protected static SAML2IdPEntityService SAML2IDP_ENTITY_SERVICE;
 
-    protected static OIDCJWKSService OIDC_JWKS_SERVICE;
+    protected static OIDCOpEntityService OIDC_OP_ENTITY_SERVICE;
 
     protected static WAConfigService WA_CONFIG_SERVICE;
 
@@ -398,11 +406,9 @@ public abstract class AbstractITCase {
 
     private static int POP3_PORT;
 
+    protected static boolean IS_DEPLOYED_IN_PAYARA = false;
+
     protected static boolean IS_FLOWABLE_ENABLED = false;
-
-    protected static boolean IS_ELASTICSEARCH_ENABLED = false;
-
-    protected static boolean IS_OPENSEARCH_ENABLED = false;
 
     protected static boolean IS_EXT_SEARCH_ENABLED = false;
 
@@ -452,6 +458,25 @@ public abstract class AbstractITCase {
     }
 
     @BeforeAll
+    public static void jakartaEEContainerCheck() throws IOException {
+        TLSClientParameters tlsParams = new TLSClientParameters();
+        tlsParams.setTrustManagers(InsecureTrustManager.getNoOpX509TrustManagers());
+        tlsParams.setDisableCNCheck(true);
+
+        WebClient webClient = WebClient.create("https://localhost:8181/");
+        HTTPConduit conduit = WebClient.getConfig(webClient).getHttpConduit();
+        conduit.getClient().setConnectionTimeout(2000);
+        conduit.getClient().setReceiveTimeout(2000);
+        conduit.setTlsClientParameters(tlsParams);
+
+        try {
+            IS_DEPLOYED_IN_PAYARA = webClient.get().readEntity(String.class).contains("Payara");
+        } catch (Exception e) {
+            LOG.debug("While checking if Syncope Core is deployed in Payara", e);
+        }
+    }
+
+    @BeforeAll
     public static void anonymousSetup() throws IOException {
         try (InputStream propStream = AbstractITCase.class.getResourceAsStream("/core.properties")) {
             Properties props = new Properties();
@@ -493,32 +518,32 @@ public abstract class AbstractITCase {
         JsonNode beans = MAPPER.readTree(beansJSON);
 
         JsonNode uwfAdapter = beans.findValues("uwfAdapter").getFirst();
-        IS_FLOWABLE_ENABLED = uwfAdapter.get("resource").asText().contains("Flowable");
+        IS_FLOWABLE_ENABLED = uwfAdapter.get("resource").asString().contains("Flowable");
 
         JsonNode anySearchDAO = beans.findValues("anySearchDAO").getFirst();
-        IS_ELASTICSEARCH_ENABLED = anySearchDAO.get("type").asText().contains("Elasticsearch");
-        IS_OPENSEARCH_ENABLED = anySearchDAO.get("type").asText().contains("OpenSearch");
-        IS_EXT_SEARCH_ENABLED = IS_ELASTICSEARCH_ENABLED || IS_OPENSEARCH_ENABLED;
+        boolean isElasticsearchEnabled = anySearchDAO.get("resource").asString().contains("Elasticsearch");
+        boolean isOpenSearchEnabled = anySearchDAO.get("resource").asString().contains("OpenSearch");
+        IS_EXT_SEARCH_ENABLED = isElasticsearchEnabled || isOpenSearchEnabled;
 
-        IS_NEO4J_PERSISTENCE = anySearchDAO.get("type").asText().contains("Neo4j");
+        IS_NEO4J_PERSISTENCE = anySearchDAO.get("resource").asString().contains("neo4j");
 
         if (!IS_EXT_SEARCH_ENABLED) {
             return;
         }
 
-        SyncopeClientFactoryBean masterCF = new SyncopeClientFactoryBean().setAddress(ADDRESS);
-        SyncopeClientFactoryBean twoCF = new SyncopeClientFactoryBean().setAddress(ADDRESS).setDomain("Two");
-        SyncopeClient masterSC = masterCF.create(ADMIN_UNAME, ADMIN_PWD);
+        SyncopeClient masterSC = new SyncopeClientFactoryBean().setAddress(ADDRESS).
+                setDomain(SyncopeConstants.MASTER_DOMAIN).create(ADMIN_UNAME, ADMIN_PWD);
         ImplementationService masterIS = masterSC.getService(ImplementationService.class);
         TaskService masterTS = masterSC.getService(TaskService.class);
-        SyncopeClient twoSC = twoCF.create(ADMIN_UNAME, "password2");
+        SyncopeClient twoSC = new SyncopeClientFactoryBean().setAddress(ADDRESS).
+                setDomain("Two").create(ADMIN_UNAME, "password2");
         ImplementationService twoIS = twoSC.getService(ImplementationService.class);
         TaskService twoTS = twoSC.getService(TaskService.class);
 
-        if (IS_ELASTICSEARCH_ENABLED) {
+        if (isElasticsearchEnabled) {
             initExtSearch(masterIS, masterTS, "org.apache.syncope.core.provisioning.java.job.ElasticsearchReindex");
             initExtSearch(twoIS, twoTS, "org.apache.syncope.core.provisioning.java.job.ElasticsearchReindex");
-        } else if (IS_OPENSEARCH_ENABLED) {
+        } else if (isOpenSearchEnabled) {
             initExtSearch(masterIS, masterTS, "org.apache.syncope.core.provisioning.java.job.OpenSearchReindex");
             initExtSearch(twoIS, twoTS, "org.apache.syncope.core.provisioning.java.job.OpenSearchReindex");
         }
@@ -550,11 +575,11 @@ public abstract class AbstractITCase {
         REALM_SERVICE = ADMIN_CLIENT.getService(RealmService.class);
         ANY_OBJECT_SERVICE = ADMIN_CLIENT.getService(AnyObjectService.class);
         ROLE_SERVICE = ADMIN_CLIENT.getService(RoleService.class);
-        DYN_REALM_SERVICE = ADMIN_CLIENT.getService(DynRealmService.class);
         USER_SERVICE = ADMIN_CLIENT.getService(UserService.class);
         USER_SELF_SERVICE = ADMIN_CLIENT.getService(UserSelfService.class);
         USER_REQUEST_SERVICE = ADMIN_CLIENT.getService(UserRequestService.class);
         USER_WORKFLOW_TASK_SERVICE = ADMIN_CLIENT.getService(UserWorkflowTaskService.class);
+        MFA_SERVICE = ADMIN_CLIENT.getService(MfaService.class);
         GROUP_SERVICE = ADMIN_CLIENT.getService(GroupService.class);
         RESOURCE_SERVICE = ADMIN_CLIENT.getService(ResourceService.class);
         CONNECTOR_SERVICE = ADMIN_CLIENT.getService(ConnectorService.class);
@@ -584,8 +609,14 @@ public abstract class AbstractITCase {
         PASSWORD_MANAGEMENT_SERVICE = ADMIN_CLIENT.getService(PasswordManagementService.class);
         SAML2IDP_ENTITY_SERVICE = ADMIN_CLIENT.getService(SAML2IdPEntityService.class);
         AUTH_PROFILE_SERVICE = ADMIN_CLIENT.getService(AuthProfileService.class);
-        OIDC_JWKS_SERVICE = ADMIN_CLIENT.getService(OIDCJWKSService.class);
+        OIDC_OP_ENTITY_SERVICE = ADMIN_CLIENT.getService(OIDCOpEntityService.class);
         WA_CONFIG_SERVICE = ADMIN_CLIENT.getService(WAConfigService.class);
+    }
+
+    protected static void awaitIfExtSearchEnabled() {
+        if (IS_EXT_SEARCH_ENABLED) {
+            await().atMost(Duration.ofSeconds(2)).pollInterval(Duration.ofSeconds(1)).until(() -> true);
+        }
     }
 
     protected static String getUUIDString() {
@@ -786,6 +817,23 @@ public abstract class AbstractITCase {
                 (InputStream) response.getEntity(), response.getMediaType(), new BatchResponseItem());
     }
 
+    protected static <E extends EntityTO> E getEntity(final ProvisioningResult<E> result) {
+        List<String> failures = result.getPropagationStatuses().stream().
+                filter(status -> status.getStatus() != ExecStatus.SUCCESS).
+                map(status -> "Propagation to " + status.getResource()
+                + " was not successful: " + status.getFailureReason()).toList();
+        if (!failures.isEmpty()) {
+            fail(String.join("\n", failures));
+        }
+        return result.getEntity();
+    }
+
+    protected static void assertSuccessful(final ExecTO execution) {
+        if (!ExecStatus.SUCCESS.equals(ExecStatus.valueOf(execution.getStatus()))) {
+            fail(execution.getRefDesc() + " failed:\n" + execution.getMessage());
+        }
+    }
+
     private static <T> T execOnLDAP(
             final String bindDn,
             final String bindPassword,
@@ -963,6 +1011,13 @@ public abstract class AbstractITCase {
         oidcrpTO.setAuthPolicy(authPolicyTO.getKey());
         oidcrpTO.setAccessPolicy(accessPolicyTO.getKey());
 
+        oidcrpTO.setAccessTokenMaxActiveTokens(0L);
+        oidcrpTO.setAccessTokenMaxTimeToLive("PT8H");
+        oidcrpTO.setAccessTokenTimeToKill("PT2H");
+        oidcrpTO.setRefreshTokenMaxActiveTokens(0L);
+        oidcrpTO.setRefreshTokenTimeToKill("P14D");
+        oidcrpTO.setDeviceTokenTimeToKill("PT5M");
+
         return oidcrpTO;
     }
 
@@ -1028,6 +1083,7 @@ public abstract class AbstractITCase {
         conf.getReleaseAttrs().put("cn", "fullname");
         conf.getAllowedAttrs().addAll(List.of("cn", "givenName"));
         conf.getIncludeOnlyAttrs().add("cn");
+        conf.getPrincipalAttrRepoConf().getAttrRepos().add("DefaultStubAttrRepo");
 
         policy.setConf(conf);
 
@@ -1064,13 +1120,7 @@ public abstract class AbstractITCase {
     }
 
     protected static List<AuditEventTO> query(final AuditQuery query, final int maxWaitSeconds) {
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         int i = 0;
         List<AuditEventTO> results = List.of();
@@ -1126,6 +1176,38 @@ public abstract class AbstractITCase {
                 return false;
             }
         });
+    }
+
+    protected static String getPassword(final String key) {
+        String response = WebClient.create(
+                StringUtils.substringBeforeLast(ADDRESS, "/") + "/actuator/testSecurity/PASSWORD/" + key,
+                ANONYMOUS_UNAME,
+                ANONYMOUS_KEY,
+                null).
+                accept(MediaType.APPLICATION_JSON).get().readEntity(String.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> payload = MAPPER.readValue(response, Map.class);
+        return payload.isEmpty()
+                ? null
+                : Optional.ofNullable(payload.get("password")).map(Object::toString).orElse(null);
+    }
+
+    protected static Map<String, Object> getToken(final String key) {
+        String response = WebClient.create(
+                StringUtils.substringBeforeLast(ADDRESS, "/") + "/actuator/testSecurity/TOKEN/" + key,
+                ANONYMOUS_UNAME,
+                ANONYMOUS_KEY,
+                null).
+                accept(MediaType.APPLICATION_JSON).get().readEntity(String.class);
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = MAPPER.readValue(response, Map.class);
+            return payload;
+        } catch (Exception e) {
+            LOG.error("Could not parse {}", response, e);
+            return Map.of();
+        }
     }
 
     @Autowired

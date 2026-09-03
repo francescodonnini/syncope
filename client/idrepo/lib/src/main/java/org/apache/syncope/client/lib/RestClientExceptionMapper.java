@@ -22,10 +22,10 @@ import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotAuthorizedException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.GenericType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.Provider;
-import jakarta.xml.ws.WebServiceException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -61,21 +61,23 @@ public class RestClientExceptionMapper implements ResponseExceptionMapper<Except
             ex = new NotAuthorizedException(StringUtils.isBlank(message)
                     ? "Remote unauthorized exception"
                     : message,
-                    Response.status(Response.Status.UNAUTHORIZED).build());
+                    response);
         } else if (statusCode == Response.Status.FORBIDDEN.getStatusCode()) {
             // 3. Map SC_FORBIDDEN
             ex = new ForbiddenException(StringUtils.isBlank(message)
                     ? "Remote forbidden exception"
-                    : message);
+                    : message,
+                    response);
         } else if (statusCode == Response.Status.BAD_REQUEST.getStatusCode()) {
             // 4. Map SC_BAD_REQUEST
             ex = StringUtils.isBlank(message)
-                    ? new BadRequestException()
-                    : new BadRequestException(message);
+                    ? new BadRequestException(response)
+                    : new BadRequestException(message, response);
         } else {
             // 5. All other codes are mapped to runtime exception with HTTP code information
-            ex = new WebServiceException(String.format("Remote exception with status code: %s",
-                    Response.Status.fromStatusCode(statusCode).name()));
+            ex = new WebApplicationException("Remote exception with status code: %s".
+                    formatted(Response.Status.fromStatusCode(statusCode).name()),
+                    response);
         }
 
         if (ex instanceof NotFoundException
@@ -94,13 +96,11 @@ public class RestClientExceptionMapper implements ResponseExceptionMapper<Except
     }
 
     private static SyncopeClientCompositeException checkSyncopeClientCompositeException(final Response response) {
-        SyncopeClientCompositeException compException = SyncopeClientException.buildComposite();
-
         // Attempts to read ErrorTO or List<ErrorTO> as entity...
         List<ErrorTO> errors = null;
         try {
             ErrorTO error = response.readEntity(ErrorTO.class);
-            if (error != null) {
+            if (error != null && error.getType() != null) {
                 errors = List.of(error);
             }
         } catch (Exception e) {
@@ -116,6 +116,7 @@ public class RestClientExceptionMapper implements ResponseExceptionMapper<Except
         }
 
         // ...if not possible, attempts to parse response headers
+        SyncopeClientCompositeException compException = SyncopeClientException.buildComposite();
         if (errors == null) {
             List<String> exTypesInHeaders = response.getStringHeaders().get(RESTHeaders.ERROR_CODE);
             if (exTypesInHeaders == null) {

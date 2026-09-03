@@ -51,12 +51,13 @@ import org.apache.syncope.client.console.rest.AnyTypeClassRestClient;
 import org.apache.syncope.client.console.rest.AnyTypeRestClient;
 import org.apache.syncope.client.console.rest.AuditRestClient;
 import org.apache.syncope.client.console.rest.CommandRestClient;
+import org.apache.syncope.client.console.rest.ConsoleAnonymousRestClient;
 import org.apache.syncope.client.console.rest.DelegationRestClient;
-import org.apache.syncope.client.console.rest.DynRealmRestClient;
 import org.apache.syncope.client.console.rest.FIQLQueryRestClient;
 import org.apache.syncope.client.console.rest.GroupRestClient;
 import org.apache.syncope.client.console.rest.ImplementationRestClient;
 import org.apache.syncope.client.console.rest.LoggerConf;
+import org.apache.syncope.client.console.rest.MfaRestClient;
 import org.apache.syncope.client.console.rest.NotificationRestClient;
 import org.apache.syncope.client.console.rest.PolicyRestClient;
 import org.apache.syncope.client.console.rest.RealmRestClient;
@@ -69,8 +70,10 @@ import org.apache.syncope.client.console.rest.SyncopeRestClient;
 import org.apache.syncope.client.console.rest.TaskRestClient;
 import org.apache.syncope.client.console.rest.UserRestClient;
 import org.apache.syncope.client.console.rest.UserSelfRestClient;
+import org.apache.syncope.client.ui.commons.DynamicMenuStringResourceLoader;
 import org.apache.syncope.client.ui.commons.MIMETypesLoader;
 import org.apache.syncope.client.ui.commons.PreviewUtils;
+import org.apache.syncope.client.ui.commons.rest.AnonymousRestClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -235,12 +238,6 @@ public class IdRepoConsoleContext {
 
     @ConditionalOnMissingBean
     @Bean
-    public DynRealmRestClient dynRealmRestClient() {
-        return new DynRealmRestClient();
-    }
-
-    @ConditionalOnMissingBean
-    @Bean
     public FIQLQueryRestClient fiqlQueryRestClient() {
         return new FIQLQueryRestClient();
     }
@@ -333,5 +330,23 @@ public class IdRepoConsoleContext {
     @Bean
     public UserSelfRestClient userSelfRestClient() {
         return new UserSelfRestClient();
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public MfaRestClient mfaRestClient() {
+        return new MfaRestClient();
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public AnonymousRestClient anonymousRestClient() {
+        return new ConsoleAnonymousRestClient();
+    }
+
+    @ConditionalOnMissingBean
+    @Bean
+    public DynamicMenuStringResourceLoader dynamicMenuStringResourceLoader() {
+        return new DynamicMenuStringResourceLoader();
     }
 }

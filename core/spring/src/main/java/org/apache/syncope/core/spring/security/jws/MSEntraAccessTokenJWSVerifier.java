@@ -18,7 +18,6 @@
  */
 package org.apache.syncope.core.spring.security.jws;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -46,8 +45,6 @@ import org.slf4j.LoggerFactory;
 public class MSEntraAccessTokenJWSVerifier implements JWSVerifier {
 
     protected static final Logger LOG = LoggerFactory.getLogger(MSEntraAccessTokenJWSVerifier.class);
-
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
 
     protected final Cache<String, JWSVerifier> verifiersCache;
 
@@ -104,7 +101,7 @@ public class MSEntraAccessTokenJWSVerifier implements JWSVerifier {
         String keyId = header.getKeyID();
         JWSVerifier delegate = Optional.ofNullable(verifiersCache.get(keyId)).
                 orElseThrow(() -> new JOSEException(
-                String.format("JSON Web Key Set cache could not retrieve a public key for given key id '%s'", keyId)));
+                "JSON Web Key Set cache could not retrieve a public key for given key id '%s'".formatted(keyId)));
 
         return delegate.verify(header, signingInput, signature);
     }

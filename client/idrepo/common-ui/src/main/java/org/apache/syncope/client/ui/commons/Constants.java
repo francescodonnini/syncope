@@ -49,9 +49,9 @@ public final class Constants {
 
     public static final String USERNAME_FIELD_NAME = "username";
 
-    public static final String NAME_FIELD_NAME = "name";
+    public static final String PASSWORD_FIELD_NAME = "password";
 
-    public static final String DEFAULT_TOKEN_FIELD_NAME = "token";
+    public static final String NAME_FIELD_NAME = "name";
 
     public static final String ON_CLICK = "click";
 

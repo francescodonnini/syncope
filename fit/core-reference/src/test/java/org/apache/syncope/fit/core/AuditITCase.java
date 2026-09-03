@@ -27,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import jakarta.ws.rs.core.Response;
 import java.io.File;
 import java.io.IOException;
@@ -42,7 +41,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.syncope.client.lib.SyncopeClient;
 import org.apache.syncope.common.lib.Attr;
@@ -224,7 +222,7 @@ public class AuditITCase extends AbstractITCase {
     }
 
     @Test
-    public void findByConnector() throws JsonProcessingException {
+    public void findByConnector() {
         String connectorKey = "74141a3b-0762-4720-a4aa-fc3e374ef3ef";
 
         AuditQuery query = new AuditQuery.Builder().
@@ -242,13 +240,13 @@ public class AuditITCase extends AbstractITCase {
         String originalDisplayName = ldapConn.getDisplayName();
         Set<ConnectorCapability> originalCapabilities = new HashSet<>(ldapConn.getCapabilities());
         ConnConfProperty originalConfProp = SerializationUtils.clone(
-                ldapConn.getConf("maintainPosixGroupMembership").get());
+                ldapConn.getConf("maintainPosixGroupMembership").orElseThrow());
         assertEquals(1, originalConfProp.getValues().size());
         assertEquals("false", originalConfProp.getValues().getFirst());
 
         ldapConn.setDisplayName(originalDisplayName + " modified");
         ldapConn.getCapabilities().clear();
-        ldapConn.getConf("maintainPosixGroupMembership").get().getValues().set(0, "true");
+        ldapConn.getConf("maintainPosixGroupMembership").orElseThrow().getValues().set(0, "true");
         CONNECTOR_SERVICE.update(ldapConn);
 
         ldapConn = CONNECTOR_SERVICE.read(connectorKey, null);
@@ -265,7 +263,7 @@ public class AuditITCase extends AbstractITCase {
         ldapConn = CONNECTOR_SERVICE.read(connectorKey, null);
         assertEquals(originalDisplayName, ldapConn.getDisplayName());
         assertEquals(originalCapabilities, ldapConn.getCapabilities());
-        assertEquals(originalConfProp, ldapConn.getConf("maintainPosixGroupMembership").get());
+        assertEquals(originalConfProp, ldapConn.getConf("maintainPosixGroupMembership").orElseThrow());
     }
 
     @Test
@@ -391,13 +389,7 @@ public class AuditITCase extends AbstractITCase {
         auditEvent.setOutput(UUID.randomUUID().toString());
         assertDoesNotThrow(() -> AUDIT_SERVICE.create(auditEvent));
 
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         PagedResult<AuditEventTO> events = AUDIT_SERVICE.search(new AuditQuery.Builder().
                 size(1).
@@ -426,13 +418,7 @@ public class AuditITCase extends AbstractITCase {
         auditEvent.setOutput(UUID.randomUUID().toString());
         assertDoesNotThrow(() -> AUDIT_SERVICE.create(auditEvent));
 
-        if (IS_EXT_SEARCH_ENABLED) {
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-        }
+        awaitIfExtSearchEnabled();
 
         PagedResult<AuditEventTO> events = AUDIT_SERVICE.search(new AuditQuery.Builder().
                 size(1).
@@ -598,13 +584,7 @@ public class AuditITCase extends AbstractITCase {
                     build()).getEntity();
 
             // search by empty type and category events and get both events on testfromLDAP
-            if (IS_EXT_SEARCH_ENABLED) {
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ex) {
-                    // ignore
-                }
-            }
+            awaitIfExtSearchEnabled();
 
             assertEquals(1, AUDIT_SERVICE.search(new AuditQuery.Builder().
                     entityKey(pullFromLDAP.getKey()).
@@ -645,8 +625,9 @@ public class AuditITCase extends AbstractITCase {
             logicActions.setKey("CustomAuditLogicActions");
             logicActions.setEngine(ImplementationEngine.GROOVY);
             logicActions.setType(IdRepoImplementationType.LOGIC_ACTIONS);
-            logicActions.setBody(IOUtils.toString(
-                    getClass().getResourceAsStream("/CustomAuditLogicActions.groovy"), StandardCharsets.UTF_8));
+            logicActions.setBody(new String(
+                    getClass().getResourceAsStream("/CustomAuditLogicActions.groovy").readAllBytes(),
+                    StandardCharsets.UTF_8));
             Response response = IMPLEMENTATION_SERVICE.create(logicActions);
             logicActions = IMPLEMENTATION_SERVICE.read(
                     logicActions.getType(), response.getHeaderString(RESTHeaders.RESOURCE_KEY));

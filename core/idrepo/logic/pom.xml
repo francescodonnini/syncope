@@ -24,7 +24,7 @@ under the License.
   <parent>
     <groupId>org.apache.syncope.core</groupId>
     <artifactId>syncope-core-idrepo</artifactId>
-    <version>4.1.0-SNAPSHOT</version>
+    <version>5.0.0-SNAPSHOT</version>
   </parent>
 
   <name>Apache Syncope Core IdRepo Logic</name>
@@ -45,11 +45,6 @@ under the License.
     <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-context-support</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.tika</groupId>
-      <artifactId>tika-core</artifactId>
     </dependency>
 
     <dependency>
@@ -154,6 +149,7 @@ under the License.
             <syncope.conf.dir>${project.build.directory}/test-classes</syncope.conf.dir>
             <syncope.connid.location>file:${bundles.directory}/</syncope.connid.location>
             <TESTCONTAINERS_REUSE_ENABLE>true</TESTCONTAINERS_REUSE_ENABLE>
+            <org.jboss.logging.provider>slf4j</org.jboss.logging.provider>
           </systemPropertyVariables>
         </configuration>
       </plugin>

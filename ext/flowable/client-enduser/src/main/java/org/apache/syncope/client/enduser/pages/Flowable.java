@@ -48,7 +48,7 @@ import org.apache.wicket.model.StringResourceModel;
 import org.apache.wicket.request.mapper.parameter.PageParameters;
 import org.apache.wicket.spring.injection.annot.SpringBean;
 
-@ExtPage(label = "User Requests", icon = "fa fa-briefcase", listEntitlement = "")
+@ExtPage(label = "Flowable", icon = "fa fa-briefcase", listEntitlement = "")
 public class Flowable extends BaseExtPage {
 
     private static final long serialVersionUID = -8781434495150074529L;
@@ -81,9 +81,8 @@ public class Flowable extends BaseExtPage {
                         userRequestRestClient.startRequest(bpmnProcessModel.getObject());
                     } catch (Exception e) {
                         LOG.error("Unable to start bpmnProcess [{}]", bpmnProcessModel.getObject(), e);
-                        SyncopeEnduserSession.get()
-                                .error(String.format("Unable to start bpmnProcess [%s]", e.getMessage()));
-                        notificationPanel.refresh(target);
+                        SyncopeEnduserSession.get().error("Unable to start bpmnProcess [%s]".formatted(e.getMessage()));
+                        getNotificationPanel().refresh(target);
                     }
                     target.add(container);
                 }
@@ -125,7 +124,7 @@ public class Flowable extends BaseExtPage {
 
                     @Override
                     public WebMarkupContainer getPanel(final String panelId) {
-                        return new UserRequestDetails(panelId, userRequest, container, notificationPanel);
+                        return new UserRequestDetails(panelId, userRequest, container, getNotificationPanel());
                     }
                 }), Model.of(-1)).setOutputMarkupId(true));
             }

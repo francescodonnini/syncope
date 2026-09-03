@@ -40,7 +40,6 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.Base64;
 import java.util.Date;
-import org.apache.commons.io.IOUtils;
 import org.apache.syncope.common.rest.api.service.wa.WASAML2SPService;
 import org.apache.syncope.wa.bootstrap.WARestClient;
 import org.bouncycastle.asn1.ASN1EncodableVector;
@@ -56,9 +55,9 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.TBSCertificate;
 import org.bouncycastle.asn1.x509.Time;
 import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator;
-import org.pac4j.saml.client.SAML2Client;
 import org.pac4j.saml.config.SAML2Configuration;
 import org.pac4j.saml.metadata.SAML2IdentityProviderMetadataResolver;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 
@@ -98,10 +97,11 @@ public abstract class BaseWASAML2ClientTest {
         return cert;
     }
 
-    protected static SAML2Client getSAML2Client() throws Exception {
+    protected static SAML2Configuration getSAML2Configuration() throws Exception {
         SAML2Configuration cfg = new SAML2Configuration();
-        cfg.setKeystorePassword("password");
-        cfg.setPrivateKeyPassword("password");
+        cfg.getKeystore().setKeystoreResource(new ByteArrayResource(new byte[0]));
+        cfg.getKeystore().setKeystorePassword("password");
+        cfg.getKeystore().setPrivateKeyPassword("password");
 
         cfg.setIdentityProviderMetadataResource(new ClassPathResource("idp-metadata.xml"));
 
@@ -111,10 +111,7 @@ public abstract class BaseWASAML2ClientTest {
 
         cfg.setServiceProviderMetadataResource(new FileSystemResource(File.createTempFile("sp-metadata", ".xml")));
 
-        SAML2Client client = new SAML2Client(cfg);
-        client.setName("CAS");
-        client.setCallbackUrl("https://syncope.apache.org");
-        return client;
+        return cfg;
     }
 
     protected static KeyStore getKeystore() throws Exception {
@@ -139,9 +136,9 @@ public abstract class BaseWASAML2ClientTest {
     }
 
     protected static String getSPMetadata() throws IOException {
-        return Base64.getEncoder().encodeToString(
-                IOUtils.toString(new ClassPathResource("sp-metadata.xml").getInputStream(), StandardCharsets.UTF_8).
-                        getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(new String(
+                new ClassPathResource("sp-metadata.xml").getInputStream().readAllBytes(), StandardCharsets.UTF_8).
+                getBytes(StandardCharsets.UTF_8));
     }
 
     protected static WARestClient getWARestClient() throws Exception {

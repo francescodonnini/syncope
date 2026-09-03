@@ -18,10 +18,9 @@
  */
 package org.apache.syncope.client.console.policies;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +41,7 @@ import org.apache.syncope.client.ui.commons.markup.html.form.AjaxCheckBoxPanel;
 import org.apache.syncope.client.ui.commons.markup.html.form.AjaxDropDownChoicePanel;
 import org.apache.syncope.client.ui.commons.markup.html.form.AjaxPalettePanel;
 import org.apache.syncope.client.ui.commons.pages.BaseWebPage;
+import org.apache.syncope.common.lib.jackson.SyncopeJsonMapper;
 import org.apache.syncope.common.lib.policy.AbstractCorrelationRuleConf;
 import org.apache.syncope.common.lib.policy.DefaultInboundCorrelationRuleConf;
 import org.apache.syncope.common.lib.policy.DefaultPushCorrelationRuleConf;
@@ -64,12 +64,13 @@ import org.apache.wicket.model.LoadableDetachableModel;
 import org.apache.wicket.model.Model;
 import org.apache.wicket.model.PropertyModel;
 import org.apache.wicket.spring.injection.annot.SpringBean;
+import tools.jackson.databind.json.JsonMapper;
 
 public class ProvisioningPolicyModalPanel extends AbstractModalPanel<ProvisioningPolicyTO> {
 
     private static final long serialVersionUID = 2988891313881271124L;
 
-    protected static final JsonMapper MAPPER = JsonMapper.builder().findAndAddModules().build();
+    protected static final JsonMapper MAPPER = new SyncopeJsonMapper();
 
     @SpringBean
     protected ImplementationRestClient implementationRestClient;
@@ -334,7 +335,7 @@ public class ProvisioningPolicyModalPanel extends AbstractModalPanel<Provisionin
             choices.add(Constants.KEY_FIELD_NAME);
             choices.add(rule.getAnyType().equals(AnyTypeKind.USER.name())
                     ? Constants.USERNAME_FIELD_NAME : Constants.NAME_FIELD_NAME);
-            Collections.sort(choices);
+            choices.sort(Comparator.naturalOrder());
             return choices;
         }
     }

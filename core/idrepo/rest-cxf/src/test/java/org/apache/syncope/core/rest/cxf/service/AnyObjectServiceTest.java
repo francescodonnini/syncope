@@ -28,8 +28,6 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.jakarta.rs.json.JacksonJsonProvider;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Request;
 import jakarta.ws.rs.core.Response;
@@ -65,10 +63,10 @@ import org.apache.syncope.common.lib.to.ProvisioningResult;
 import org.apache.syncope.common.rest.api.DateParamConverterProvider;
 import org.apache.syncope.common.rest.api.RESTHeaders;
 import org.apache.syncope.common.rest.api.service.AnyObjectService;
-import org.apache.syncope.core.logic.AnyObjectLogic;
+import org.apache.syncope.core.logic.AnyObjectLogicOp;
 import org.apache.syncope.core.persistence.api.dao.AnyObjectDAO;
 import org.apache.syncope.core.persistence.api.dao.search.SearchCond;
-import org.apache.syncope.core.persistence.api.search.SearchCondVisitor;
+import org.apache.syncope.core.persistence.api.search.AnySearchCondVisitor;
 import org.apache.syncope.core.persistence.api.search.SyncopePage;
 import org.apache.syncope.core.rest.cxf.AddETagFilter;
 import org.apache.syncope.core.rest.cxf.RestServiceExceptionMapper;
@@ -80,6 +78,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.jakarta.rs.json.JacksonJsonProvider;
 
 @SpringJUnitConfig(classes = { IdRepoRESTCXFTestContext.class })
 public class AnyObjectServiceTest {
@@ -117,7 +117,7 @@ public class AnyObjectServiceTest {
         if (SERVER == null) {
             AnyObjectDAO anyObjectDAO = mock(AnyObjectDAO.class);
 
-            AnyObjectLogic logic = mock(AnyObjectLogic.class);
+            AnyObjectLogicOp logic = mock(AnyObjectLogicOp.class);
             when(logic.search(
                     any(SearchCond.class), any(Pageable.class), anyString(), anyBoolean(), anyBoolean())).
                     thenAnswer(ic -> {
@@ -145,7 +145,7 @@ public class AnyObjectServiceTest {
                 return result;
             });
 
-            SearchCondVisitor searchCondVisitor = mock(SearchCondVisitor.class);
+            AnySearchCondVisitor searchCondVisitor = mock(AnySearchCondVisitor.class);
             when(searchCondVisitor.getQuery()).thenReturn(new SearchCond());
 
             @SuppressWarnings("unchecked")
