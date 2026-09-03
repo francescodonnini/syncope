@@ -93,6 +93,21 @@ import org.springframework.data.util.Streamable;
 
 public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
 
+    /**
+     * {@code MATCH (n) } is the entry point of virtually every leaf condition query fragment built by this class.
+     */
+    protected static final String MATCH_N = "MATCH (n) ";
+
+    /**
+     * {@code WHERE } is appended before almost every predicate built by this class.
+     */
+    protected static final String WHERE = "WHERE ";
+
+    /**
+     * Fragment used to open a Cypher node property filter, e.g. {@code (:Node <ID_EQ>$param0}) }.
+     */
+    protected static final String ID_EQ = " {id: $";
+
     protected record AdminRealmsFilter(String filter, Set<String> dynRealmKeys, Set<String> groupOwners) {
 
     }
@@ -110,6 +125,24 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             Set<String> fields,
             Set<PlainSchema> plainSchemas,
             List<AttrCondQuery> membershipAttrConds) {
+
+    }
+
+    /**
+     * Value plus the metadata ({@code fillAttrQuery} needs to decide how to render it in the generated query.
+     *
+     * @param value the literal value to render
+     * @param isStr whether the value must be quoted as a string
+     * @param lower whether the comparison must be case-insensitive
+     */
+    protected record ValueMeta(String value, boolean isStr, boolean lower) {
+
+    }
+
+    /**
+     * The fields involved in a membership plain attribute lookup, plus the plain schemas they refer to.
+     */
+    protected record MembershipFieldSet(Set<String> fields, Set<PlainSchema> plainSchemas) {
 
     }
 
@@ -141,6 +174,10 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
 
     protected final Neo4jClient neo4jClient;
 
+    // The parameter count is dictated by AbstractAnySearchDAO's constructor plus the two Neo4j-specific
+    // dependencies below: it cannot be reduced further without changing the shared, backend-agnostic
+    // AbstractAnySearchDAO contract used by every persistence implementation (JPA, Neo4j, ...).
+    @SuppressWarnings("java:S107")
     public Neo4jAnySearchDAO(
             final RealmSearchDAO realmSearchDAO,
             final DynRealmDAO dynRealmDAO,
@@ -175,13 +212,43 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
 
     protected String buildAdminRealmsFilter(
             final Set<String> realmKeys,
+            final boolean unrestricted,
             final Map<String, Object> parameters) {
 
-        if (realmKeys.isEmpty()) {
+        // An empty realmKeys set is ambiguous on its own: it can mean either "no restriction is needed here
+        // because access is granted through another mechanism" (dynamic realms, group ownership - unrestricted)
+        // or "no realm at all was found to be accessible" (must match nothing). The caller tells us which one
+        // applies via the unrestricted flag.
+        if (realmKeys.isEmpty() && unrestricted) {
             return "(n)-[]-(:" + Neo4jRealm.NODE + ")";
         }
 
         return "(n)-[]-(r:" + Neo4jRealm.NODE + ") WHERE r.id IN $" + setParameter(parameters, realmKeys);
+    }
+
+    /**
+     * Resolves a single {@code adminRealms} entry (recursive case) into either a group-owner key, a set of
+     * plain realm keys, or a dynamic realm key, mutating the relevant accumulator accordingly.
+     */
+    protected void collectRealmOrDynRealmKeys(
+            final Realm base,
+            final String realmPath,
+            final Set<String> realmKeys,
+            final Set<String> dynRealmKeys) {
+
+        if (realmPath.startsWith("/")) {
+            Realm realm = realmSearchDAO.findByFullPath(realmPath).orElseThrow(() -> {
+                SyncopeClientException noRealm = SyncopeClientException.build(ClientExceptionType.InvalidRealm);
+                noRealm.getElements().add("Invalid realm specified: " + realmPath);
+                return noRealm;
+            });
+
+            realmKeys.addAll(realmSearchDAO.findDescendants(realm.getFullPath(), base.getFullPath()));
+        } else {
+            dynRealmDAO.findById(realmPath).ifPresentOrElse(
+                    dynRealm -> dynRealmKeys.add(dynRealm.getKey()),
+                    () -> LOG.warn("Ignoring invalid dynamic realm {}", realmPath));
+        }
     }
 
     protected AdminRealmsFilter getAdminRealmsFilter(
@@ -197,32 +264,23 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
         if (recursive) {
             adminRealms.forEach(realmPath -> RealmUtils.GroupOwnerRealm.of(realmPath).ifPresentOrElse(
                     goRealm -> groupOwners.add(goRealm.groupKey()),
-                    () -> {
-                        if (realmPath.startsWith("/")) {
-                            Realm realm = realmSearchDAO.findByFullPath(realmPath).orElseThrow(() -> {
-                                SyncopeClientException noRealm =
-                                        SyncopeClientException.build(ClientExceptionType.InvalidRealm);
-                                noRealm.getElements().add("Invalid realm specified: " + realmPath);
-                                return noRealm;
-                            });
-
-                            realmKeys.addAll(realmSearchDAO.findDescendants(realm.getFullPath(), base.getFullPath()));
-                        } else {
-                            dynRealmDAO.findById(realmPath).ifPresentOrElse(
-                                    dynRealm -> dynRealmKeys.add(dynRealm.getKey()),
-                                    () -> LOG.warn("Ignoring invalid dynamic realm {}", realmPath));
-                        }
-                    }));
+                    () -> collectRealmOrDynRealmKeys(base, realmPath, realmKeys, dynRealmKeys)));
             if (!dynRealmKeys.isEmpty()) {
                 realmKeys.clear();
             }
-        } else {
-            if (adminRealms.stream().anyMatch(r -> r.startsWith(base.getFullPath()))) {
-                realmKeys.add(base.getKey());
-            }
+        } else if (adminRealms.stream().anyMatch(base.getFullPath()::startsWith)) {
+            // base is granted when one of the admin realms is base itself or one of its ancestors:
+            // administering a realm implies administering everything below it.
+            realmKeys.add(base.getKey());
         }
 
-        return new AdminRealmsFilter(buildAdminRealmsFilter(realmKeys, parameters), dynRealmKeys, groupOwners);
+        // when access is (also) granted via dynamic realms or group ownership, those mechanisms are enforced
+        // by extra OR-ed conditions elsewhere: the realm-based filter built here must not additionally restrict
+        // the search in that case.
+        boolean unrestricted = !dynRealmKeys.isEmpty() || !groupOwners.isEmpty();
+
+        return new AdminRealmsFilter(
+                buildAdminRealmsFilter(realmKeys, unrestricted, parameters), dynRealmKeys, groupOwners);
     }
 
     protected String getQuery(
@@ -230,9 +288,7 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             final boolean not,
             final Map<String, Object> parameters) {
 
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "(n)-[]-"
-                + "(:" + Neo4jAnyType.NODE + " {id: $" + setParameter(parameters, cond.getAnyTypeKey()) + "}) ";
+        return matchNodeById(Neo4jAnyType.NODE, not, cond.getAnyTypeKey(), parameters);
     }
 
     protected String getQuery(
@@ -240,9 +296,33 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             final boolean not,
             final Map<String, Object> parameters) {
 
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "(n)-[]-"
-                + "(:" + Neo4jAnyTypeClass.NODE + " {id: $" + setParameter(parameters, cond.getAuxClass()) + "}) ";
+        return matchNodeById(Neo4jAnyTypeClass.NODE, not, cond.getAuxClass(), parameters);
+    }
+
+    protected String getQuery(
+            final DynRealmCond cond,
+            final boolean not,
+            final Map<String, Object> parameters) {
+
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "") + "(n)-"
+                + "[:" + DynRealmRepoExt.DYN_REALM_MEMBERSHIP_REL + "]-"
+                + "(:" + Neo4jDynRealm.NODE + ID_EQ + setParameter(parameters, cond.getDynRealm()) + "}) ";
+    }
+
+    /**
+     * Builds {@code MATCH (n) WHERE [NOT ](n)-[]-(:nodeLabel {id: $paramN}) }, the common shape shared by several
+     * simple "n is linked to a single identified node" leaf conditions.
+     */
+    protected String matchNodeById(
+            final String nodeLabel,
+            final boolean not,
+            final Object idValue,
+            final Map<String, Object> parameters) {
+
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "") + "(n)-[]-"
+                + "(:" + nodeLabel + ID_EQ + setParameter(parameters, idValue) + "}) ";
     }
 
     protected String getQuery(
@@ -255,8 +335,8 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
                 ? Neo4jARelationship.NODE
                 : Neo4jURelationship.NODE;
 
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "EXISTS { MATCH (n)-[]-(r:" + relTypeNode + ")-[]-"
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "") + "EXISTS { MATCH (n)-[]-(r:" + relTypeNode + ")-[]-"
                 + "(t:" + Neo4jRelationshipType.NODE
                 + " {id: $ " + setParameter(parameters, cond.getRelationshipTypeKey()) + "}) } ";
     }
@@ -276,10 +356,13 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
                 ? Neo4jARelationship.DEST_REL
                 : Neo4jURelationship.DEST_REL;
 
-        return "MATCH (n) "
+        return MATCH_N
                 + "WHERE EXISTS { "
                 + "MATCH(n)-[]-(:" + relTypeNode + ")-[:" + destRelType + "]-(anyObject:" + Neo4jAnyObject.NODE + ") "
-                + "WHERE anyObject.id " + (not ? "NOT " : "") + "IN $" + setParameter(parameters, rightAnyObjects)
+                // NOT must negate the whole membership test, not just the IN operand: "id NOT IN $x" would
+                // still match n as soon as ANY related anyObject falls outside $x, instead of requiring that
+                // none of them falls inside it.
+                + WHERE + (not ? "NOT " : "") + "anyObject.id IN $" + setParameter(parameters, rightAnyObjects)
                 + " } ";
     }
 
@@ -292,8 +375,8 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
         List<String> groupKeys = check(cond);
 
         String param = setParameter(parameters, groupKeys);
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "EXISTS { "
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "") + "EXISTS { "
                 + "MATCH (n)-[]-(:" + Neo4jUMembership.NODE + ")-[]-"
                 + "(g:" + Neo4jGroup.NODE + ") WHERE g.id IN $" + param + " } "
                 + (not ? "AND NOT" : "OR") + " EXISTS { "
@@ -315,8 +398,8 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
         Set<String> memberKeys = check(cond);
 
         String param = setParameter(parameters, memberKeys);
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "EXISTS { "
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "") + "EXISTS { "
                 + "MATCH (n)-[]-(:" + Neo4jUMembership.NODE + ")-[]-"
                 + "(m:" + Neo4jUser.NODE + ") WHERE m.id IN $" + param + " } "
                 + (not ? "AND NOT" : "OR") + " EXISTS { "
@@ -336,24 +419,13 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             final Map<String, Object> parameters) {
 
         String param = setParameter(parameters, cond.getRole());
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "")
+        return MATCH_N
+                + WHERE + (not ? "NOT " : "")
                 + "(n)-[:" + Neo4jUser.ROLE_MEMBERSHIP_REL + "]-"
-                + "(:" + Neo4jRole.NODE + " {id: $" + param + "}) "
+                + "(:" + Neo4jRole.NODE + ID_EQ + param + "}) "
                 + (not ? "AND NOT" : "OR") + " EXISTS { "
                 + "MATCH (n)-[:" + RoleRepoExt.DYN_ROLE_MEMBERSHIP_REL + "]-"
-                + "(:" + Neo4jRole.NODE + " {id: $" + param + "}) } ";
-    }
-
-    protected String getQuery(
-            final DynRealmCond cond,
-            final boolean not,
-            final Map<String, Object> parameters) {
-
-        return "MATCH (n) "
-                + "WHERE " + (not ? "NOT " : "") + "(n)-"
-                + "[:" + DynRealmRepoExt.DYN_REALM_MEMBERSHIP_REL + "]-"
-                + "(:" + Neo4jDynRealm.NODE + " {id: $" + setParameter(parameters, cond.getDynRealm()) + "}) ";
+                + "(:" + Neo4jRole.NODE + ID_EQ + param + "}) } ";
     }
 
     protected String getQuery(
@@ -363,30 +435,142 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             final Map<String, Object> parameters) {
 
         String param = setParameter(parameters, cond.getResource());
-        TextStringBuilder query = new TextStringBuilder("MATCH (n) ").
-                append("WHERE ").
+        TextStringBuilder query = new TextStringBuilder(MATCH_N).
+                append(WHERE).
                 append(not ? "NOT " : "").
-                append("(n)-[]-(:").append(Neo4jExternalResource.NODE).append(" {id: $").append(param).append("}) ");
+                append("(n)-[]-(:").append(Neo4jExternalResource.NODE).append(ID_EQ).append(param).append("}) ");
 
         if (kind == AnyTypeKind.USER || kind == AnyTypeKind.ANY_OBJECT) {
             String membershipTypeNode = kind == AnyTypeKind.ANY_OBJECT
                     ? Neo4jAMembership.NODE
                     : Neo4jUMembership.NODE;
 
-            if (not) {
-                query.append("AND NOT EXISTS { ");
-            } else {
-                query.append("OR EXISTS { ");
-            }
-
-            query.append("MATCH (n)-[]-(:").append(membershipTypeNode).append(")-[]-").
+            query.append(not ? "AND NOT EXISTS { " : "OR EXISTS { ").
+                    append("MATCH (n)-[]-(:").append(membershipTypeNode).append(")-[]-").
                     append("(g:").append(Neo4jGroup.NODE).append(") ").
-                    append("WHERE ").
-                    append("(g)-[]-(:").append(Neo4jExternalResource.NODE).append(" {id: $").append(param).append("})").
+                    append(WHERE).
+                    append("(g)-[]-(:").append(Neo4jExternalResource.NODE).append(ID_EQ).append(param).append("})").
                     append(" } ");
         }
 
         return query.toString();
+    }
+
+    /**
+     * Determines whether a raw expression can be treated as the plain schema's declared numeric/boolean type
+     * (in which case it does not need to be quoted as a string in the generated query).
+     */
+    protected boolean parsesAsDeclaredType(final AttrSchemaType type, final String value) {
+        try {
+            switch (type) {
+                case Long ->
+                        Long.valueOf(value);
+
+                case Double ->
+                        Double.valueOf(value);
+
+                case Boolean -> {
+                    if (!("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value))) {
+                        throw new IllegalArgumentException();
+                    }
+                }
+
+                default -> {
+                    // no numeric/boolean coercion applies to this schema type
+                }
+            }
+            return true;
+        } catch (RuntimeException ignored) {
+            // value does not match the declared schema type: keep it quoted as a string
+            return false;
+        }
+    }
+
+    protected ValueMeta resolvePlainAttrValueMeta(
+            final PlainSchema schema,
+            final AttrCond cond,
+            final PlainAttrValue attrValue) {
+
+        String value = Optional.ofNullable(attrValue.getDateValue()).
+                map(DateTimeFormatter.ISO_OFFSET_DATE_TIME::format).
+                orElseGet(cond::getExpression);
+
+        if (schema.getType().isStringClass()) {
+            boolean lower = cond.getType() == AttrCond.Type.IEQ || cond.getType() == AttrCond.Type.ILIKE;
+            return new ValueMeta(value, true, lower);
+        }
+        if (schema.getType() == AttrSchemaType.Date) {
+            return new ValueMeta(value, true, false);
+        }
+
+        return new ValueMeta(value, !parsesAsDeclaredType(schema.getType(), value), false);
+    }
+
+    protected void negatePlainAttrClause(final TextStringBuilder query, final PlainSchema schema) {
+        if (schema.isUniqueConstraint()) {
+            query.replaceFirst("WHERE", "WHERE NOT(");
+            query.append(')');
+        } else {
+            query.replaceAll("any(", schema.getKey() + " IS NULL OR none(");
+        }
+    }
+
+    protected void appendPlainAttrClause(
+            final TextStringBuilder query,
+            final PlainSchema schema,
+            final AttrCond cond,
+            final ValueMeta meta) {
+
+        switch (cond.getType()) {
+            case ISNULL -> {
+                // getQuery(AttrCond, boolean, Map) intercepts ISNULL before it ever reaches this switch;
+                // kept here defensively for any other/future caller of this generic helper.
+            }
+
+            case ISNOTNULL ->
+                    query.append(schema.getKey()).append(" IS NOT NULL");
+
+            case ILIKE, LIKE -> {
+                if (schema.getType().isStringClass()) {
+                    appendPlainAttrCond(
+                            query,
+                            schema,
+                            " =~ \"" + (meta.lower() ? "(?i)" : "")
+                                    + AnyRepoExt.escapeForLikeRegex(meta.value()).replace("%", ".*") + '"');
+                } else {
+                    query.append(ALWAYS_FALSE_CLAUSE);
+                    LOG.error("LIKE is only compatible with string or enum schemas");
+                }
+            }
+
+            case IEQ, EQ -> {
+                if (StringUtils.containsAny(meta.value(), AnyRepoExt.REGEX_CHARS) || meta.lower()) {
+                    appendPlainAttrCond(
+                            query,
+                            schema,
+                            " =~ \"^" + (meta.lower() ? "(?i)" : "")
+                                    + AnyRepoExt.escapeForLikeRegex(meta.value()).replace("%", ".*") + "$\"");
+                } else {
+                    appendPlainAttrCond(query, schema, " = " + escapeIfString(meta.value(), meta.isStr()));
+                }
+            }
+
+            case GE ->
+                    appendPlainAttrCond(query, schema, " >= " + escapeIfString(meta.value(), meta.isStr()));
+
+            case GT ->
+                    appendPlainAttrCond(query, schema, " > " + escapeIfString(meta.value(), meta.isStr()));
+
+            case LE ->
+                    appendPlainAttrCond(query, schema, " <= " + escapeIfString(meta.value(), meta.isStr()));
+
+            case LT ->
+                    appendPlainAttrCond(query, schema, " < " + escapeIfString(meta.value(), meta.isStr()));
+
+            default -> {
+                // AttrCond.Type has no further values besides the ones handled above
+            }
+        }
     }
 
     protected void fillAttrQuery(
@@ -403,116 +587,72 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             return;
         }
         if (not) {
-            if (schema.isUniqueConstraint()) {
-                fillAttrQuery(query, attrValue, schema, cond, false, parameters);
-                query.replaceFirst("WHERE", "WHERE NOT(");
-                query.append(')');
-            } else {
-                fillAttrQuery(query, attrValue, schema, cond, false, parameters);
-                query.replaceAll("any(", schema.getKey() + " IS NULL OR none(");
-            }
+            fillAttrQuery(query, attrValue, schema, cond, false, parameters);
+            negatePlainAttrClause(query, schema);
             return;
         }
 
-        String value = Optional.ofNullable(attrValue.getDateValue()).
-                map(DateTimeFormatter.ISO_OFFSET_DATE_TIME::format).
-                orElseGet(cond::getExpression);
+        ValueMeta meta = resolvePlainAttrValueMeta(schema, cond, attrValue);
 
-        boolean isStr = true;
-        boolean lower = false;
-        if (schema.getType().isStringClass()) {
-            lower = (cond.getType() == AttrCond.Type.IEQ || cond.getType() == AttrCond.Type.ILIKE);
-        } else if (schema.getType() != AttrSchemaType.Date) {
-            lower = false;
-            try {
-                switch (schema.getType()) {
-                    case Long ->
-                        Long.valueOf(value);
+        query.append(WHERE);
+        appendPlainAttrClause(query, schema, cond, meta);
+    }
 
-                    case Double ->
-                        Double.valueOf(value);
+    protected String loweredParam(final Map<String, Object> parameters, final boolean lower, final Object value) {
+        String param = "$" + setParameter(parameters, value);
+        return lower ? "toLower(" + param + ')' : param;
+    }
 
-                    case Boolean -> {
-                        if (!("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value))) {
-                            throw new IllegalArgumentException();
-                        }
-                    }
-
-                    default -> {
-                    }
-                }
-
-                isStr = false;
-            } catch (Exception nfe) {
-                // ignore
-            }
-        }
-
-        query.append("WHERE ");
+    protected void appendAnyAttrClause(
+            final TextStringBuilder query,
+            final PlainSchema schema,
+            final AnyCond cond,
+            final PlainAttrValue attrValue,
+            final String property,
+            final boolean lower,
+            final Map<String, Object> parameters) {
 
         switch (cond.getType()) {
-            case ISNULL -> {
-            }
+            case ISNULL ->
+                    query.append(property).append(" IS NULL");
 
             case ISNOTNULL ->
-                query.append(schema.getKey()).append(" IS NOT NULL");
+                    query.append(property).append(" IS NOT NULL");
 
             case ILIKE, LIKE -> {
                 if (schema.getType().isStringClass()) {
-                    appendPlainAttrCond(
-                            query,
-                            schema,
-                            " =~ \"" + (lower ? "(?i)" : "")
-                            + AnyRepoExt.escapeForLikeRegex(value).replace("%", ".*") + '"');
+                    query.append(property).append(" =~ ").
+                            append(loweredParam(parameters, lower, cond.getExpression().replace("%", ".*")));
                 } else {
-                    query.append(ALWAYS_FALSE_CLAUSE);
+                    query.append(' ').append(ALWAYS_FALSE_CLAUSE);
                     LOG.error("LIKE is only compatible with string or enum schemas");
                 }
             }
 
-            case IEQ, EQ -> {
-                if (StringUtils.containsAny(value, AnyRepoExt.REGEX_CHARS) || lower) {
-                    appendPlainAttrCond(
-                            query,
-                            schema,
-                            " =~ \"^" + (lower ? "(?i)" : "")
-                            + AnyRepoExt.escapeForLikeRegex(value).replace("%", ".*") + "$\"");
-                } else {
-                    appendPlainAttrCond(
-                            query,
-                            schema,
-                            " = " + escapeIfString(value, isStr));
-                }
-            }
+            case IEQ, EQ ->
+                    query.append(property).append('=').
+                            append(loweredParam(parameters, lower, attrValue.getValue()));
 
             case GE ->
-                appendPlainAttrCond(
-                        query,
-                        schema,
-                        " >= " + escapeIfString(value, isStr));
+                    query.append(property).append(">=").
+                            append('$').append(setParameter(parameters, attrValue.getValue()));
 
             case GT ->
-                appendPlainAttrCond(
-                        query,
-                        schema,
-                        " > " + escapeIfString(value, isStr));
+                    query.append(property).append('>').
+                            append('$').append(setParameter(parameters, attrValue.getValue()));
 
             case LE ->
-                appendPlainAttrCond(
-                        query,
-                        schema,
-                        " <= " + escapeIfString(value, isStr));
+                    query.append(property).append("<=").
+                            append('$').append(setParameter(parameters, attrValue.getValue()));
 
             case LT ->
-                appendPlainAttrCond(
-                        query,
-                        schema,
-                        " < " + escapeIfString(value, isStr));
+                    query.append(property).append('<').
+                            append('$').append(setParameter(parameters, attrValue.getValue()));
 
             default -> {
+                // AttrCond.Type has no further values besides the ones handled above
             }
         }
-        // shouldn't occour: processed before
     }
 
     protected void fillAttrQuery(
@@ -534,97 +674,12 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             query.append(')');
             return;
         }
-        if (not && cond.getType() == AttrCond.Type.ISNULL) {
-            cond.setType(AttrCond.Type.ISNOTNULL);
-            fillAttrQuery(query, attrValue, schema, cond, true, parameters);
-            return;
-        }
 
         boolean lower = schema.getType().isStringClass()
                 && (cond.getType() == AttrCond.Type.IEQ || cond.getType() == AttrCond.Type.ILIKE);
+        String property = lower ? "toLower (n." + cond.getSchema() + ')' : "n." + cond.getSchema();
 
-        String property = "n." + cond.getSchema();
-        if (lower) {
-            property = "toLower (" + property + ')';
-        }
-
-        switch (cond.getType()) {
-
-            case ISNULL ->
-                query.append(property).append(" IS NULL");
-
-            case ISNOTNULL ->
-                query.append(property).append(" IS NOT NULL");
-
-            case ILIKE, LIKE -> {
-                if (schema.getType().isStringClass()) {
-                    query.append(property).append(" =~ ");
-                    if (lower) {
-                        query.append("toLower($").
-                                append(setParameter(parameters, cond.getExpression().replace("%", ".*"))).
-                                append(')');
-                    } else {
-                        query.append('$').append(setParameter(parameters, cond.getExpression().replace("%", ".*")));
-                    }
-                } else {
-                    query.append(' ').append(ALWAYS_FALSE_CLAUSE);
-                    LOG.error("LIKE is only compatible with string or enum schemas");
-                }
-            }
-
-            case IEQ, EQ -> {
-                query.append(property).append('=');
-
-                if (lower) {
-                    query.append("toLower($").append(setParameter(parameters, attrValue.getValue())).append(')');
-                } else {
-                    query.append('$').append(setParameter(parameters, attrValue.getValue()));
-                }
-            }
-
-            case GE -> {
-                query.append(property);
-                if (not) {
-                    query.append('<');
-                } else {
-                    query.append(">=");
-                }
-                query.append('$').append(setParameter(parameters, attrValue.getValue()));
-            }
-
-            case GT -> {
-                query.append(property);
-                if (not) {
-                    query.append("<=");
-                } else {
-                    query.append('>');
-                }
-                query.append('$').append(setParameter(parameters, attrValue.getValue()));
-            }
-
-            case LE -> {
-                query.append(property);
-                if (not) {
-                    query.append('>');
-                } else {
-                    query.append("<=");
-                }
-                query.append('$').append(setParameter(parameters, attrValue.getValue()));
-            }
-
-            case LT -> {
-                query.append(property);
-                if (not) {
-                    query.append(">=");
-                } else {
-                    query.append('<');
-                }
-                query.append('$').append(setParameter(parameters, attrValue.getValue()));
-            }
-
-            default -> {
-            }
-        }
+        appendAnyAttrClause(query, schema, cond, attrValue, property, lower, parameters);
     }
 
     protected AnyCondQuery getQuery(
@@ -637,13 +692,13 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             if (!SyncopeConstants.UUID_PATTERN.matcher(cond.getExpression()).matches()) {
                 Realm realm = realmSearchDAO.findByFullPath(cond.getExpression()).
                         orElseThrow(() -> new IllegalArgumentException(
-                        "Invalid Realm full path: " + cond.getExpression()));
+                                "Invalid Realm full path: " + cond.getExpression()));
                 cond.setExpression(realm.getKey());
             }
 
             return new AnyCondQuery(
                     "MATCH (n)-[]-"
-                    + "(:" + Neo4jRealm.NODE + " {id: $" + setParameter(parameters, cond.getExpression()) + "}) ",
+                            + "(:" + Neo4jRealm.NODE + ID_EQ + setParameter(parameters, cond.getExpression()) + "}) ",
                     null);
         }
 
@@ -653,34 +708,40 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
                 RELATIONSHIP_FIELDS,
                 StringUtils.substringBefore(checked.cond().getSchema(), "_id"))) {
 
-            String field = StringUtils.substringBefore(checked.cond().getSchema(), "_id");
-            switch (field) {
-                case "userOwner" -> {
-                    return new AnyCondQuery(
-                            "MATCH (n)-[:" + Neo4jGroup.USER_OWNER_REL + "]-"
-                            + "(:" + Neo4jUser.NODE + " "
-                            + "{id: $" + setParameter(parameters, cond.getExpression()) + "})",
-                            null);
-                }
-
-                case "groupOwner" -> {
-                    return new AnyCondQuery(
-                            "MATCH (n)-[:" + Neo4jGroup.GROUP_OWNER_REL + "]-"
-                            + "(:" + Neo4jGroup.NODE + " "
-                            + "{id: $" + setParameter(parameters, cond.getExpression()) + "})",
-                            null);
-                }
-
-                default ->
-                    throw new IllegalArgumentException("Unsupported relationship: " + field);
-            }
+            return getRelationshipFieldQuery(checked.cond(), parameters);
         }
 
-        TextStringBuilder query = new TextStringBuilder("MATCH (n) WHERE ");
+        TextStringBuilder query = new TextStringBuilder(MATCH_N + WHERE);
 
         fillAttrQuery(query, checked.value(), checked.schema(), checked.cond(), not, parameters);
 
         return new AnyCondQuery(query.toString(), checked.cond().getSchema());
+    }
+
+    /**
+     * Handles the {@code userOwner}/{@code groupOwner} pseudo-schemas, which resolve to a relationship rather
+     * than to a plain attribute comparison.
+     */
+    protected AnyCondQuery getRelationshipFieldQuery(final AnyCond cond, final Map<String, Object> parameters) {
+        String field = StringUtils.substringBefore(cond.getSchema(), "_id");
+        return switch (field) {
+            case "userOwner" ->
+                    new AnyCondQuery(
+                            "MATCH (n)-[:" + Neo4jGroup.USER_OWNER_REL + "]-"
+                                    + "(:" + Neo4jUser.NODE + " "
+                                    + ID_EQ + setParameter(parameters, cond.getExpression()) + "})",
+                            null);
+
+            case "groupOwner" ->
+                    new AnyCondQuery(
+                            "MATCH (n)-[:" + Neo4jGroup.GROUP_OWNER_REL + "]-"
+                                    + "(:" + Neo4jGroup.NODE + " "
+                                    + ID_EQ + setParameter(parameters, cond.getExpression()) + "})",
+                            null);
+
+            default ->
+                    throw new IllegalArgumentException("Unsupported relationship: " + field);
+        };
     }
 
     protected AttrCondQuery getQuery(
@@ -690,16 +751,20 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
 
         CheckResult<AttrCond> checked = check(cond);
 
-        TextStringBuilder query = new TextStringBuilder("MATCH (n) ");
+        TextStringBuilder query = new TextStringBuilder(MATCH_N);
         switch (cond.getType()) {
             case ISNOTNULL ->
-                query.append("WHERE n.`plainAttrs.").append(checked.schema().getKey()).append("` IS NOT NULL");
+                    query.append(WHERE).append("n.`plainAttrs.").append(checked.schema().getKey()).
+                            // NOT must be honoured here too: ISNOTNULL/ISNULL never reach fillAttrQuery from this
+                            // call site, so their negation has to be applied directly.
+                                    append(not ? "` IS NULL" : "` IS NOT NULL");
 
             case ISNULL ->
-                query.append("WHERE n.`plainAttrs.").append(checked.schema().getKey()).append("` IS NULL");
+                    query.append(WHERE).append("n.`plainAttrs.").append(checked.schema().getKey()).
+                            append(not ? "` IS NOT NULL" : "` IS NULL");
 
             default ->
-                fillAttrQuery(query, checked.value(), checked.schema(), cond, not, parameters);
+                    fillAttrQuery(query, checked.value(), checked.schema(), cond, not, parameters);
         }
 
         return new AttrCondQuery(query.toString(), checked.schema());
@@ -722,111 +787,133 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
             final QueryInfo rightInfo) {
 
         query.append("WHERE EXISTS { ").
-                append(Strings.CS.prependIfMissing(leftInfo.query().toString(), "MATCH (n) ")).
+                append(Strings.CS.prependIfMissing(leftInfo.query().toString(), MATCH_N)).
                 append(" } ").
                 append(op).append(" EXISTS { ").
-                append(Strings.CS.prependIfMissing(rightInfo.query().toString(), "MATCH (n) ")).
+                append(Strings.CS.prependIfMissing(rightInfo.query().toString(), MATCH_N)).
                 append(" }");
     }
 
-    protected QueryInfo getQuery(final AnyTypeKind kind, final SearchCond cond, final Map<String, Object> parameters) {
-        boolean not = cond.getType() == SearchCond.Type.NOT_LEAF;
+    /**
+     * Builds the query fragment (and collects the involved fields/plain schemas) for a single leaf
+     * {@link SearchCond}.
+     */
+    protected QueryInfo getLeafQuery(
+            final AnyTypeKind kind,
+            final SearchCond cond,
+            final boolean not,
+            final Map<String, Object> parameters) {
 
         TextStringBuilder query = new TextStringBuilder();
         Set<String> involvedFields = new HashSet<>();
         Set<PlainSchema> involvedPlainSchemas = new HashSet<>();
         List<AttrCondQuery> membershipAttrConds = new ArrayList<>();
 
+        cond.asLeaf(AnyTypeCond.class).
+                filter(leaf -> AnyTypeKind.ANY_OBJECT == kind).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(AuxClassCond.class).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(RelationshipTypeCond.class).
+                filter(leaf -> AnyTypeKind.GROUP != kind).
+                ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
+
+        cond.asLeaf(RelationshipCond.class).
+                filter(leaf -> AnyTypeKind.GROUP != kind).
+                ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
+
+        cond.asLeaf(MembershipCond.class).
+                filter(leaf -> AnyTypeKind.GROUP != kind).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(MemberCond.class).
+                filter(leaf -> AnyTypeKind.GROUP == kind).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(RoleCond.class).
+                filter(leaf -> AnyTypeKind.USER == kind).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(DynRealmCond.class).
+                ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
+
+        cond.asLeaf(ResourceCond.class).
+                ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
+
+        cond.asLeaf(AnyCond.class).ifPresentOrElse(
+                anyCond -> {
+                    AnyCondQuery anyCondQuery = getQuery(kind, anyCond, not, parameters);
+                    query.append(anyCondQuery.query());
+                    Optional.ofNullable(anyCondQuery.field()).ifPresent(involvedFields::add);
+                },
+                () -> cond.asLeaf(AttrCond.class).ifPresent(leaf -> {
+                    AttrCondQuery attrCondQuery = getQuery(leaf, not, parameters);
+                    query.append(attrCondQuery.query());
+                    involvedPlainSchemas.add(attrCondQuery.schema());
+                    if (kind != AnyTypeKind.GROUP
+                            && !not
+                            && leaf.getType() != AttrCond.Type.ISNULL
+                            && leaf.getType() != AttrCond.Type.ISNOTNULL) {
+
+                        membershipAttrConds.add(attrCondQuery);
+                    }
+                }));
+
+        // allow for additional search conditions
+        getQueryForCustomConds(kind, cond, parameters, not, query);
+
+        return new QueryInfo(query, involvedFields, involvedPlainSchemas, membershipAttrConds);
+    }
+
+    /**
+     * Combines the {@link QueryInfo} of two branches ({@code AND}/{@code OR}) with the given Cypher operator.
+     */
+    protected QueryInfo combineQuery(
+            final AnyTypeKind kind,
+            final SearchCond cond,
+            final Map<String, Object> parameters,
+            final String op) {
+
+        QueryInfo leftInfo = getQuery(kind, cond.getLeft(), parameters);
+        QueryInfo rightInfo = getQuery(kind, cond.getRight(), parameters);
+
+        Set<String> involvedFields = new HashSet<>(leftInfo.fields());
+        involvedFields.addAll(rightInfo.fields());
+
+        Set<PlainSchema> involvedPlainSchemas = new HashSet<>(leftInfo.plainSchemas());
+        involvedPlainSchemas.addAll(rightInfo.plainSchemas());
+
+        List<AttrCondQuery> membershipAttrConds = new ArrayList<>(leftInfo.membershipAttrConds());
+        membershipAttrConds.addAll(rightInfo.membershipAttrConds());
+
+        TextStringBuilder query = new TextStringBuilder();
+        queryOp(query, op, leftInfo, rightInfo);
+
+        return new QueryInfo(query, involvedFields, involvedPlainSchemas, membershipAttrConds);
+    }
+
+    protected QueryInfo getQuery(final AnyTypeKind kind, final SearchCond cond, final Map<String, Object> parameters) {
         switch (cond.getType()) {
             case LEAF, NOT_LEAF -> {
-                cond.asLeaf(AnyTypeCond.class).
-                        filter(leaf -> AnyTypeKind.ANY_OBJECT == kind).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(AuxClassCond.class).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(RelationshipTypeCond.class).
-                        filter(leaf -> AnyTypeKind.GROUP != kind).
-                        ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
-
-                cond.asLeaf(RelationshipCond.class).
-                        filter(leaf -> AnyTypeKind.GROUP != kind).
-                        ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
-
-                cond.asLeaf(MembershipCond.class).
-                        filter(leaf -> AnyTypeKind.GROUP != kind).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(MemberCond.class).
-                        filter(leaf -> AnyTypeKind.GROUP == kind).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(RoleCond.class).
-                        filter(leaf -> AnyTypeKind.USER == kind).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(DynRealmCond.class).
-                        ifPresent(leaf -> query.append(getQuery(leaf, not, parameters)));
-
-                cond.asLeaf(ResourceCond.class).
-                        ifPresent(leaf -> query.append(getQuery(kind, leaf, not, parameters)));
-
-                cond.asLeaf(AnyCond.class).ifPresentOrElse(
-                        anyCond -> {
-                            AnyCondQuery anyCondQuery = getQuery(kind, anyCond, not, parameters);
-                            query.append(anyCondQuery.query());
-                            Optional.ofNullable(anyCondQuery.field()).ifPresent(involvedFields::add);
-                        },
-                        () -> cond.asLeaf(AttrCond.class).ifPresent(leaf -> {
-                            AttrCondQuery attrCondQuery = getQuery(leaf, not, parameters);
-                            query.append(attrCondQuery.query());
-                            involvedPlainSchemas.add(attrCondQuery.schema());
-                            if (kind != AnyTypeKind.GROUP
-                                    && !not
-                                    && leaf.getType() != AttrCond.Type.ISNULL
-                                    && leaf.getType() != AttrCond.Type.ISNOTNULL) {
-
-                                membershipAttrConds.add(attrCondQuery);
-                            }
-                        }));
-
-                // allow for additional search conditions
-                getQueryForCustomConds(kind, cond, parameters, not, query);
+                return getLeafQuery(kind, cond, cond.getType() == SearchCond.Type.NOT_LEAF, parameters);
             }
+
             case AND -> {
-                QueryInfo leftAndInfo = getQuery(kind, cond.getLeft(), parameters);
-                involvedFields.addAll(leftAndInfo.fields());
-                involvedPlainSchemas.addAll(leftAndInfo.plainSchemas());
-                membershipAttrConds.addAll(leftAndInfo.membershipAttrConds());
-
-                QueryInfo rigthAndInfo = getQuery(kind, cond.getRight(), parameters);
-                involvedFields.addAll(rigthAndInfo.fields());
-                involvedPlainSchemas.addAll(rigthAndInfo.plainSchemas());
-                membershipAttrConds.addAll(rigthAndInfo.membershipAttrConds());
-
-                queryOp(query, "AND", leftAndInfo, rigthAndInfo);
+                return combineQuery(kind, cond, parameters, "AND");
             }
 
             case OR -> {
-                QueryInfo leftOrInfo = getQuery(kind, cond.getLeft(), parameters);
-                involvedFields.addAll(leftOrInfo.fields());
-                involvedPlainSchemas.addAll(leftOrInfo.plainSchemas());
-                membershipAttrConds.addAll(leftOrInfo.membershipAttrConds());
-
-                QueryInfo rigthOrInfo = getQuery(kind, cond.getRight(), parameters);
-                involvedFields.addAll(rigthOrInfo.fields());
-                involvedPlainSchemas.addAll(rigthOrInfo.plainSchemas());
-                membershipAttrConds.addAll(rigthOrInfo.membershipAttrConds());
-
-                queryOp(query, "OR", leftOrInfo, rigthOrInfo);
+                return combineQuery(kind, cond, parameters, "OR");
             }
 
             default -> {
+                // SearchCond.Type currently only defines LEAF, NOT_LEAF, AND and OR: kept for forward
+                // compatibility with any value that might be added in the future.
+                return new QueryInfo(new TextStringBuilder(), new HashSet<>(), new HashSet<>(), new ArrayList<>());
             }
         }
-
-        return new QueryInfo(query, involvedFields, involvedPlainSchemas, membershipAttrConds);
     }
 
     protected void wrapQuery(
@@ -842,9 +929,9 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
         AnyUtils anyUtils = anyUtilsFactory.getInstance(kind);
         queryInfo.fields().remove("id");
         Stream.concat(
-                queryInfo.fields().stream(),
-                orderBy.stream().filter(clause -> !"id".equals(clause.getProperty())
-                && anyUtils.getField(clause.getProperty()).isPresent()).map(Order::getProperty)).
+                        queryInfo.fields().stream(),
+                        orderBy.stream().filter(clause -> !"id".equals(clause.getProperty())
+                                && anyUtils.getField(clause.getProperty()).isPresent()).map(Order::getProperty)).
                 distinct().forEach(field -> match.append(", n.").append(field).append(" AS ").append(field));
 
         // take plain schemas into account
@@ -875,16 +962,60 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
         query.append(") AND EXISTS { ").append(adminRealmsFilter).append(" } ");
     }
 
+    protected MembershipFieldSet resolveMembershipFields(
+            final QueryInfo queryInfo,
+            final Set<String> orderByItems,
+            final AnyTypeKind kind) {
+
+        AnyUtils anyUtils = anyUtilsFactory.getInstance(kind);
+        Set<String> fields = Stream.concat(
+                        queryInfo.fields().stream().filter(f -> !"id".equals(f)),
+                        orderByItems.stream().filter(item -> !"id".equals(item) && anyUtils.getField(item).isPresent())).
+                collect(Collectors.toSet());
+
+        Set<PlainSchema> plainSchemas = Stream.concat(
+                        queryInfo.membershipAttrConds().stream().map(AttrCondQuery::schema),
+                        orderByItems.stream().map(plainSchemaDAO::findById).flatMap(Optional::stream)).
+                collect(Collectors.toSet());
+
+        return new MembershipFieldSet(fields, plainSchemas);
+    }
+
+    protected TextStringBuilder buildMembershipReturnClause(final MembershipFieldSet fieldSet) {
+        TextStringBuilder returnStmt = new TextStringBuilder("RETURN id");
+        fieldSet.fields().forEach(f -> returnStmt.append(", ").append(f));
+        fieldSet.plainSchemas().forEach(schema -> returnStmt.append(", ").append(schema.getKey()));
+        return returnStmt;
+    }
+
+    protected void appendMembershipPlainSchemaProjection(final TextStringBuilder query, final PlainSchema schema) {
+        query.append(", apoc.convert.getJsonProperty(n, 'plainAttrs.").append(schema.getKey()).
+                append(schema.isUniqueConstraint() ? "', '$.uniqueValue')" : "', '$.values')").
+                append(" AS ").append(schema.getKey());
+    }
+
+    protected void appendMembershipUnionClause(
+            final TextStringBuilder query,
+            final MembershipFieldSet fieldSet,
+            final AnyTypeKind kind) {
+
+        query.append(" UNION ").
+                append("MATCH (n:").append(AnyRepoExt.membNode(kind)).
+                append(")-[]-(m:").append(AnyRepoExt.node(kind)).append(") ").
+                append("WITH m.id AS id ");
+
+        fieldSet.fields().forEach(f -> query.append(", m.").append(f).append(" AS ").append(f));
+
+        fieldSet.plainSchemas().forEach(schema -> appendMembershipPlainSchemaProjection(query, schema));
+    }
+
     protected void membershipAttrConds(
             final TextStringBuilder query,
             final QueryInfo queryInfo,
             final List<String> orderBy,
             final AnyTypeKind kind) {
 
-        if (kind == AnyTypeKind.GROUP) {
-            return;
-        }
-        if (queryInfo.membershipAttrConds().isEmpty()) {
+        if (kind == AnyTypeKind.GROUP || queryInfo.membershipAttrConds().isEmpty()) {
             return;
         }
 
@@ -892,54 +1023,20 @@ public class Neo4jAnySearchDAO extends AbstractAnySearchDAO {
                 map(clause -> StringUtils.substringBefore(clause, " ")).
                 collect(Collectors.toSet());
 
-        AnyUtils anyUtils = anyUtilsFactory.getInstance(kind);
-        Set<String> fields = Stream.concat(
-                queryInfo.fields().stream().filter(f -> !"id".equals(f)),
-                orderByItems.stream().filter(item -> !"id".equals(item) && anyUtils.getField(item).isPresent())).
-                collect(Collectors.toSet());
+        MembershipFieldSet fieldSet = resolveMembershipFields(queryInfo, orderByItems, kind);
 
-        Set<PlainSchema> plainSchemas = Stream.concat(
-                queryInfo.membershipAttrConds().stream().map(AttrCondQuery::schema),
-                orderByItems.stream().map(plainSchemaDAO::findById).flatMap(Optional::stream)).
-                collect(Collectors.toSet());
-
-        // call
         query.insert(0, "CALL () { ");
 
-        // return
-        TextStringBuilder returnStmt = new TextStringBuilder("RETURN id");
-
-        fields.forEach(f -> returnStmt.append(", ").append(f));
-
-        plainSchemas.forEach(schema -> returnStmt.append(", ").append(schema.getKey()));
-
+        TextStringBuilder returnStmt = buildMembershipReturnClause(fieldSet);
         query.append(returnStmt);
 
-        // union
-        query.append(" UNION ").
-                append("MATCH (n:").append(AnyRepoExt.membNode(kind)).
-                append(")-[]-(m:").append(AnyRepoExt.node(kind) + ") ").
-                append("WITH m.id AS id ");
+        appendMembershipUnionClause(query, fieldSet, kind);
 
-        fields.forEach(f -> query.append(", m.").append(f).append(" AS ").append(f));
-
-        plainSchemas.forEach(schema -> {
-            query.append(", apoc.convert.getJsonProperty(n, 'plainAttrs.").append(schema.getKey());
-            if (schema.isUniqueConstraint()) {
-                query.append("', '$.uniqueValue')");
-            } else {
-                query.append("', '$.values')");
-            }
-            query.append(" AS ").append(schema.getKey());
-        });
-
-        query.append(" WHERE ");
-
-        query.append(queryInfo.membershipAttrConds().stream().
-                map(mac -> "(EXISTS { " + mac.query() + "} )").
-                collect(Collectors.joining(" AND ")));
-
-        query.append(" AND EXISTS { (m)-[]-(r:Realm) WHERE r.id IN $param0 } ").
+        query.append(WHERE).
+                append(queryInfo.membershipAttrConds().stream().
+                        map(mac -> "(EXISTS { " + mac.query() + "} )").
+                        collect(Collectors.joining(" AND "))).
+                append(" AND EXISTS { (m)-[]-(r:Realm) WHERE r.id IN $param0 } ").
                 append(returnStmt).
                 append(" } ");
     }
