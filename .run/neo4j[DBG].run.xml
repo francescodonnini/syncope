@@ -15,7 +15,7 @@
               <option value="verify" />
               <option value="-Dmaven.build.cache.enabled=false" />
               <option value="-DredirectTestOutputToFile=false" />
-              <option value="-Dit.test=Neo4jAnySearchDAOTestBB" />
+              <option value="-Dit.test=Neo4jAnySearchDAOBBTest" />
               <option value="-DforkCount=0" />
             </list>
           </option>

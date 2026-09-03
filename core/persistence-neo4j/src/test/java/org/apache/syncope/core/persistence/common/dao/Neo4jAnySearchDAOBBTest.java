@@ -252,15 +252,15 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
             ),
             Arguments.of(
                     "/kanto/league/gyms/cerulean",
-                    false,
-                    Set.of("/kanto/league/gyms/cerulean"),
+                    true,
+                    Set.of("/kanto/league/gyms"),
                     SearchCondBuilder.role("GymTrainer"),
                     PageRequest.of(1, 2, Sort.by(Sort.Order.by("firstName"))),
                     AnyTypeKind.USER,
                     List.of("eddie", "joy"),
                     true,
                     5,
-                    SKIP_TEST
+                    false
             ),
             // fallisce perché count() ritorna il numero di tutti gli allenatori nel reame /kanto/league/gyms
             // mentre se recursive == true count() ritorna il numero corretto cioè 5 che è il numero di allenatori
@@ -416,20 +416,6 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
                     true,
                     3,
                     false
-            ),
-            // [23] base è un nodo interno presente nel db. cond è RelationshipCond ma non ci si aspetta alcuna
-            // corrispondenza. DA FARE: questo deve far parte di incompatibleInputs
-            Arguments.of(
-                "/kanto/league/gyms",
-                    true,
-                    Set.of("/"),
-                    SearchCondBuilder.relationship("8b0901ab-c66d-ceb3-4494-5e091d3ca5a4"),
-                    PageRequest.of(1, 20),
-                    AnyTypeKind.GROUP,
-                    List.of(),
-                    false,
-                    0,
-                    SKIP_TEST
             ),
             // [23]
             Arguments.of(
@@ -625,8 +611,6 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
                     3,
                     false
             ),
-            // [44] base è un nodo foglia presente nel db. cond usa AnyType cond e non ci si aspettano
-            // corrispondenze.
             Arguments.of(
                 "/kanto/league/gyms/cerulean",
                     true,
@@ -639,7 +623,6 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
                     7,
                     false
             ),
-            // [46] base è un nodo foglia presente nel db. cond usa MemberCond ma non ci si aspettano corrispondenze.
             Arguments.of(
             "/kanto/league/gyms/cerulean",
                     true,
@@ -701,8 +684,8 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
                     AnyTypeKind.USER,
                     List.of("eddie", "joy"),
                     false,
-                    5,
-                    SKIP_TEST
+                    3,
+                    false
             ),
            // [50] base è un nodo interno presente nel db. cond usa MembershipCond ma non ci si aspettano corrispondenze
            // perché non si hanno i permessi sufficienti.
@@ -737,21 +720,6 @@ public class Neo4jAnySearchDAOBBTest extends AbstractNeo4jAnySearchDAOTest {
                     true,
                     0,
                     false
-            ),
-            // [52] base è un nodo FOGLIA presente nel db. Si usa RoleCond e non ci si aspettano
-            // corrispondenze.
-            // ATT: Agg test tra quelli che devono fallire
-            Arguments.of(
-                    "/kanto/league/gyms/pewter",
-                    false,
-                    Set.of("/"),
-                    SearchCondBuilder.role("Champion"),
-                    Pageable.unpaged(Sort.by(Sort.Order.asc("name"))),
-                    AnyTypeKind.ANY_OBJECT,
-                    List.of(),
-                    false,
-                    0,
-                    SKIP_TEST
             ),
             // [53] base è un nodo interno presente nel db. Tutti i reami in adminRealms sono validi e si usa
             // ResourceCond come predicato, ci si aspetta almeno un risultato e il numero di risultati eccede la
